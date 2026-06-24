@@ -79,27 +79,54 @@ simulasi sebelum deploy.
 
 ## ⚡ Mulai Cepat
 
-### Backend
+### Satu perintah (direkomendasikan)
+
 ```bash
+./install.sh
+```
+
+Installer ini meng-install Docker bila belum ada (tahan-banting di Fedora/WSL),
+membuat `.env` berisi secret, mendeteksi alamat LAN, build + start seluruh stack
+(postgres · redis · backend FastAPI · frontend Vite) di belakang satu gateway
+nginx, menunggu `/api/health`, lalu mencetak URL yang bisa dibuka:
+
+```
+On this machine     →  http://localhost:8090
+On the network      →  http://<LAN-IP>:8090     (buka dari HP/PC lain)
+API docs            →  http://<LAN-IP>:8090/docs
+```
+
+> Port **8090** dipilih agar tidak bentrok dengan project saudara di host yang
+> sama (SecureOps `:80`, StorageHub `:8080`). Override: `HTTP_PORT=9000 ./install.sh`.
+
+Flag lain: `--prod` (stack produksi: image immutable, nginx, scale) ·
+`--rebuild` · `--no-build` · `--down` (stop) · `--reset` (stop + HAPUS data) ·
+`--tailscale` · `--public`. Windows: `./install.ps1`. Uninstall: `./uninstall.sh`
+(`--purge` untuk menghapus volume). Target Make: `make help`.
+
+### Manual (per komponen)
+
+<details>
+<summary>Backend · Frontend · Docker Compose mentah</summary>
+
+```bash
+# Backend
 cd backend
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000        # http://localhost:8000/docs
 pytest -q                                         # 20 passed
-```
 
-### Frontend
-```bash
+# Frontend
 cd frontend
 npm install
 npm run dev                                       # http://localhost:5173
+
+# Semuanya (Docker Compose mentah, tanpa gateway LAN)
+docker compose -f infra/docker-compose.yml up --build   # postgres + redis + backend + frontend
 ```
 
-### Semuanya (Docker Compose)
-```bash
-cd infra
-docker compose up --build                         # backend + frontend + postgres + redis
-```
+</details>
 
 ### Contoh: satu intent → banyak vendor
 ```bash

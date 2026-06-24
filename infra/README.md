@@ -15,11 +15,13 @@ infra/
 ├── README.md                 ← dokumen ini
 ├── .env.prod.example         ← contoh variabel produksi (salin -> .env.prod)
 ├── docker-compose.yml        ← stack DEV (hot-reload, port di-expose)
+├── docker-compose.lan.yml    ← overlay gateway nginx :8090 (dipakai ../install.sh)
 ├── docker-compose.prod.yml   ← stack PROD (nginx, secret, resource limit, scale)
 ├── docker/
 │   ├── backend.Dockerfile    ← image FastAPI (multi-stage, non-root, multi-arch)
 │   ├── frontend.Dockerfile   ← image Vite build -> nginx
-│   └── nginx.conf            ← SPA fallback + reverse-proxy /api & /ws
+│   ├── nginx.conf            ← SPA fallback + reverse-proxy /api & /ws (prod)
+│   └── nginx.lan.conf        ← gateway dev: proxy / -> Vite, /api & /ws -> backend
 ├── db/
 │   ├── schema.sql            ← skema penuh (sumber-kebenaran, idempotent)
 │   ├── ERD.md                ← entity-relationship diagram (Mermaid + as-text)
@@ -82,10 +84,32 @@ Pembagian peran:
 | (pendukung) | `simulation_run` | audit `/api/simulate`, state live di Redis |
 | (pendukung) | `project_member` | kolaborasi multi-user + role |
 
-## Menjalankan — DEV
+## Menjalankan — satu perintah (direkomendasikan)
 
 ```bash
-# Dari root repo netforge/
+# Dari root repo netforge/ — install Docker bila perlu, build, start, tunggu health
+./install.sh
+```
+
+Installer menambah gateway nginx (`docker-compose.lan.yml`) di depan stack DEV
+agar seluruh app (frontend + `/api` + `/ws`) dapat diakses dari **satu origin**:
+
+```
+http://localhost:8090            (mesin ini)
+http://<LAN-IP>:8090             (HP/PC lain di jaringan)
+http://<LAN-IP>:8090/docs        (API docs)
+http://<LAN-IP>:8090/api/health  (health)
+```
+
+Port **8090** dipilih agar tidak bentrok dengan SecureOps (`:80`) & StorageHub
+(`:8080`) pada host yang sama. Override dengan `HTTP_PORT=9000 ./install.sh`.
+Flag: `--prod` · `--rebuild` · `--down` · `--reset` · `--tailscale` · `--public`.
+Uninstall: `./uninstall.sh` (`--purge` menghapus volume). Make: `make help`.
+
+## Menjalankan — DEV (compose mentah)
+
+```bash
+# Dari root repo netforge/ (tanpa gateway LAN — port di-expose langsung)
 docker compose -f infra/docker-compose.yml up -d
 
 # Layanan:
