@@ -67,15 +67,9 @@ simulasi sebelum deploy.
 | [`backend/`](backend/) | FastAPI app + engine DES + service config-gen/sim (`pytest`: 20 hijau) |
 | [`frontend/`](frontend/) | UI React desktop-class (shell, kanvas, panel, store) |
 | [`config-gen/`](config-gen/) | Template Jinja2 7 vendor + skema & contoh intent **ForgeOS** |
-| [`network/protocols/`](network/protocols/) | Matriks protokol + skenario referensi (campus, BGP, MPLS, EVPN) |
-| [`network/scenarios/`](network/scenarios/) | Skenario skala besar (backbone, DC, ISP, DCI, stress 1296-node) |
-| [`network/devices/`](network/devices/) | Pustaka 36 perangkat + kapabilitas + referensi FTTH |
-| [`infra/`](infra/) | Skema PostgreSQL, Redis, Docker Compose, CI (tervalidasi di PG16) |
-| [`security/`](security/) | Threat model (STRIDE), hardening, skenario lab keamanan |
-| [`docs/vision/`](docs/vision/) | Visi, roadmap, ADR, strategi inovasi, governance |
-| [`docs/research/`](docs/research/) | Analisis kompetitor, evaluasi stack, riset ForgeOS |
-| [`docs/academic/`](docs/academic/) | Paper akademis (IEEE-style) + metodologi + referensi |
-| [`MASTER_SPEC.md`](MASTER_SPEC.md) | Sumber kebenaran tunggal: model data §4, tech stack, konvensi |
+| [`network/devices/library/`](network/devices/library/) | Pustaka perangkat (router, switch, OLT/ONU, firewall, AP, optical) sebagai data |
+| [`infra/`](infra/) | Skema PostgreSQL, Redis, Docker Compose, CI |
+| [`scripts/`](scripts/) | Utilitas operasional — mis. `self-update.sh` (update dari aplikasi) |
 
 ## ⚡ Mulai Cepat
 
@@ -143,17 +137,28 @@ for v in ("ios","junos","eos","routeros","vyos","frr","forgeos"):
 PY
 ```
 
+## 🔄 Update dari aplikasi
+
+NetForge bisa **cek & pasang update langsung dari aplikasi** — ikon unduh di menu bar atas
+membandingkan versi yang berjalan dengan rilis terbaru di GitHub, lalu (opsional)
+menerapkannya: *pull → rebuild → restart*.
+
+- `GET /api/update/check` — bandingkan versi (read-only)
+- `POST /api/update/apply` — jalankan upgrade (dijaga `UPDATE_TOKEN`; nonaktif bila kosong)
+- [`scripts/self-update.sh`](scripts/self-update.sh) — satu-satunya skrip yang dijalankan
+  backend: checkout tag rilis terbaru + `docker compose up -d --build`
+
+Manual: `./scripts/self-update.sh --check` · `--apply` · `--watch`.
+
 ## 🗺️ Roadmap (ringkas)
 
 - **MVP** — kanvas + DES dasar + config-gen + ForgeOS compiler (≤ ~1.000 node)
 - **v1** — emulasi containerlab, verifikasi intent, skenario besar (≤ ~10.000 node)
 - **v2** — sharding terdistribusi, digital twin, AI-assisted topology
 
-Detail & gate performa: [`docs/vision/ROADMAP.md`](docs/vision/ROADMAP.md).
-
 ## 🤝 Kontribusi
 
-Lihat [`docs/vision/GOVERNANCE.md`](docs/vision/GOVERNANCE.md). Kontribusi memakai DCO & SemVer.
+Kontribusi memakai DCO & SemVer — buka issue / pull request di GitHub.
 
 ## 📜 Lisensi
 
