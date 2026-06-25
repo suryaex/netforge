@@ -97,3 +97,37 @@ export const configsApi = {
   forNode: (nodeId: string) =>
     http.get<ConfigArtifact[]>('/configs', { params: { node_id: nodeId } }).then((r) => r.data),
 };
+
+/* ----------------------------- Self-update ------------------------------- */
+export interface UpdateCheck {
+  current: string;
+  latest: string | null;
+  update_available: boolean;
+  notes?: string;
+  url?: string;
+  published_at?: string;
+  checked_at: number;
+  can_apply?: boolean;
+  error?: string;
+}
+export interface UpdateStatus {
+  state:
+    | 'idle'
+    | 'queued'
+    | 'updating'
+    | 'rebuilding'
+    | 'restarting'
+    | 'done'
+    | 'up-to-date'
+    | 'error';
+  message?: string;
+  at?: number;
+}
+export const updateApi = {
+  check: () => http.get<UpdateCheck>('/update/check').then((r) => r.data),
+  status: () => http.get<UpdateStatus>('/update/status').then((r) => r.data),
+  apply: (token: string) =>
+    http
+      .post<UpdateStatus>('/update/apply', null, { headers: { 'X-Update-Token': token } })
+      .then((r) => r.data),
+};

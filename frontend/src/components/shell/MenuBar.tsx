@@ -8,6 +8,7 @@ import { Moon, Sun, Wifi, WifiOff } from 'lucide-react';
 import type { ConnState } from '@/api/ws';
 import { useUiStore } from '@/store/uiStore';
 import { SimulationBar } from '@/components/SimulationBar';
+import { UpdatesButton } from '@/components/shell/UpdatesButton';
 import { cn } from '@/lib/cn';
 
 interface MenuBarProps {
@@ -50,6 +51,8 @@ export function MenuBar({ projectName, conn }: MenuBarProps) {
         {online ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
         <span className="hidden text-xs sm:inline">{conn}</span>
       </div>
+
+      <UpdatesButton />
 
       <button
         onClick={toggleTheme}
