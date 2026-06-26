@@ -78,6 +78,62 @@ body {
   background: var(--nf-accent, #007aff);
 }
 
+/* ---- Leaflet map overrides ------------------------------------------------ */
+/* Custom label tooltip for device names on the map */
+.nf-map-label {
+  background: rgba(22, 27, 42, 0.85) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 6px !important;
+  padding: 2px 6px !important;
+  backdrop-filter: blur(8px) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+  white-space: nowrap !important;
+}
+.nf-map-label::before {
+  border-top-color: rgba(255,255,255,0.15) !important;
+}
+
+/* Map popup styling */
+.leaflet-popup-content-wrapper {
+  background: rgba(22, 27, 42, 0.9) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
+  backdrop-filter: blur(16px) !important;
+  color: #f3f4f6 !important;
+}
+.leaflet-popup-tip {
+  background: rgba(22, 27, 42, 0.9) !important;
+}
+.leaflet-popup-close-button {
+  color: rgba(255,255,255,0.5) !important;
+}
+.leaflet-popup-close-button:hover {
+  color: #fff !important;
+}
+
+/* Leaflet zoom control */
+.leaflet-control-zoom a {
+  background: rgba(22, 27, 42, 0.85) !important;
+  border-color: rgba(255,255,255,0.15) !important;
+  color: rgba(255,255,255,0.8) !important;
+  backdrop-filter: blur(8px) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: rgba(0, 122, 255, 0.3) !important;
+  color: #fff !important;
+}
+
+/* Attribution */
+.leaflet-control-attribution {
+  background: rgba(22, 27, 42, 0.7) !important;
+  color: rgba(255,255,255,0.4) !important;
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a {
+  color: rgba(255,255,255,0.5) !important;
+}
+
 /* Respect reduced-motion preference for all decorative animation. */
 @media (prefers-reduced-motion: reduce) {
   *,

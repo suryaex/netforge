@@ -9,6 +9,8 @@ import type { SimState } from '@/api/types';
 
 const THEME_KEY = 'netforge.theme';
 
+export type ViewMode = 'topology' | 'map';
+
 function initialTheme(): ThemeMode {
   const saved = localStorage.getItem(THEME_KEY) as ThemeMode | null;
   if (saved === 'light' || saved === 'dark') return saved;
@@ -20,12 +22,14 @@ interface UiState {
   simState: SimState;
   simSpeed: number;
   projectId: string | null;
+  viewMode: ViewMode;
 
   setTheme: (mode: ThemeMode) => void;
   toggleTheme: () => void;
   setSimState: (s: SimState) => void;
   setSimSpeed: (n: number) => void;
   setProject: (id: string | null) => void;
+  setViewMode: (mode: ViewMode) => void;
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -33,6 +37,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   simState: 'idle',
   simSpeed: 1,
   projectId: null,
+  viewMode: 'topology',
 
   setTheme: (mode) => {
     applyTheme(mode);
@@ -43,4 +48,5 @@ export const useUiStore = create<UiState>((set, get) => ({
   setSimState: (simState) => set({ simState }),
   setSimSpeed: (simSpeed) => set({ simSpeed }),
   setProject: (projectId) => set({ projectId }),
+  setViewMode: (viewMode) => set({ viewMode }),
 }));

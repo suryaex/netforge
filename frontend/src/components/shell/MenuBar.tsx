@@ -4,7 +4,7 @@
  * theme toggle, signed-in user avatar, and a clock.
  */
 import { useEffect, useRef, useState } from 'react';
-import { LogOut, Moon, Settings2, Sun, Wifi, WifiOff } from 'lucide-react';
+import { LogOut, Map, Moon, Network, Settings2, Sun, Wifi, WifiOff } from 'lucide-react';
 import type { ConnState } from '@/api/ws';
 import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
@@ -21,6 +21,8 @@ interface MenuBarProps {
 export function MenuBar({ projectName, conn }: MenuBarProps) {
   const theme = useUiStore((s) => s.theme);
   const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const viewMode = useUiStore((s) => s.viewMode);
+  const setViewMode = useUiStore((s) => s.setViewMode);
   const username = useAuthStore((s) => s.username);
   const logout = useAuthStore((s) => s.logout);
   const toggleApp = useWindowStore((s) => s.toggleApp);
@@ -65,6 +67,38 @@ export function MenuBar({ projectName, conn }: MenuBarProps) {
       <SimulationBar />
 
       <div className="flex-1" />
+
+      {/* View mode toggle */}
+      <div className="flex items-center rounded-md border border-white/10 bg-white/5 p-0.5">
+        <button
+          onClick={() => setViewMode('topology')}
+          aria-label="Topology view"
+          title="Topology view"
+          className={cn(
+            'flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors',
+            viewMode === 'topology'
+              ? 'bg-accent text-white'
+              : 'text-white/50 hover:text-white/80',
+          )}
+        >
+          <Network className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Topology</span>
+        </button>
+        <button
+          onClick={() => setViewMode('map')}
+          aria-label="Map view"
+          title="Map view"
+          className={cn(
+            'flex items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors',
+            viewMode === 'map'
+              ? 'bg-accent text-white'
+              : 'text-white/50 hover:text-white/80',
+          )}
+        >
+          <Map className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Map</span>
+        </button>
+      </div>
 
       {/* Right-side controls */}
       <div className="flex items-center gap-1.5">

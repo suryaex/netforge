@@ -20,6 +20,7 @@ import { Dock } from '@/components/shell/Dock';
 import { WindowHost } from '@/components/shell/WindowHost';
 import { LoginPage } from '@/components/LoginPage';
 import { OnboardingModal, useOnboarding } from '@/components/OnboardingModal';
+import { MapView } from '@/components/map/MapView';
 import { projectsApi } from '@/api/client';
 import { useUiStore } from '@/store/uiStore';
 import { useWindowStore } from '@/store/windowStore';
@@ -31,6 +32,7 @@ import { applyTheme } from '@/theme/tokens';
 export default function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const theme = useUiStore((s) => s.theme);
+  const viewMode = useUiStore((s) => s.viewMode);
   const projectId = useUiStore((s) => s.projectId);
   const setProject = useUiStore((s) => s.setProject);
   const loadSnapshot = useTopologyStore((s) => s.loadSnapshot);
@@ -92,15 +94,20 @@ export default function App() {
     <div className="relative h-screen w-screen overflow-hidden">
       <MenuBar projectName={projectName} conn={conn} />
 
-      {/* Desktop surface — windows float here, between menu bar and dock. */}
+      {/* Desktop surface — windows float here (topology) or full map view */}
       <main
         className="absolute inset-x-0 bottom-0 top-9"
         aria-label="NetForge desktop"
       >
-        <WindowHost />
+        {viewMode === 'map' ? (
+          <MapView />
+        ) : (
+          <>
+            <WindowHost />
+            <Dock />
+          </>
+        )}
       </main>
-
-      <Dock />
 
       {/* First-run onboarding wizard */}
       {showOnboarding && <OnboardingModal onClose={dismissOnboarding} />}
