@@ -102,6 +102,22 @@ class Interface(_Base):
     peer_link_id: str | None = None
 
 
+class Radio(_Base):
+    """Wireless radio/antenna parameters for map-based RF planning.
+
+    Mirrors ``engine.wireless.Radio``. Present only on wireless-capable nodes
+    (kind ``ap``/``host`` placed on the map); ``None`` for wired infrastructure.
+    """
+
+    tx_power_dbm: float = 20.0
+    frequency_ghz: float = 5.8
+    antenna_gain_dbi: float = 14.0
+    bandwidth_mhz: float = 20.0
+    rx_sensitivity_dbm: float = -85.0
+    misc_loss_db: float = 2.0
+    max_range_m: float | None = None
+
+
 class Node(_Base):
     id: str
     project_id: str
@@ -111,6 +127,10 @@ class Node(_Base):
     mode: NodeMode = NodeMode.sim
     x: float = 0.0
     y: float = 0.0
+    # Geographic position for map mode (WGS84). ``None`` => canvas-only node.
+    lat: float | None = None
+    lon: float | None = None
+    radio: Radio | None = None
     interfaces: list[Interface] = Field(default_factory=list)
     config_ref: str | None = None
     status: NodeStatus = NodeStatus.stopped
@@ -126,6 +146,9 @@ class NodeCreate(_Base):
     mode: NodeMode = NodeMode.sim
     x: float = 0.0
     y: float = 0.0
+    lat: float | None = None
+    lon: float | None = None
+    radio: Radio | None = None
     interfaces: list[Interface] = Field(default_factory=list)
     intent: dict | None = None
 
@@ -136,6 +159,9 @@ class NodeUpdate(_Base):
     mode: NodeMode | None = None
     x: float | None = None
     y: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+    radio: Radio | None = None
     status: NodeStatus | None = None
     interfaces: list[Interface] | None = None
     intent: dict | None = None
@@ -223,3 +249,106 @@ class SimulateRequest(_Base):
     seed: int = 0
     horizon: float | None = None
     realtime: bool = False
+
+
+# --- wireless / RF planning -------------------------------------------------
+class LinkBudgetRequest(_Base):
+    """Compute a single point-to-point budget. Either give an explicit
+    ``distance_m`` or both endpoint coordinates (then it's derived via
+    Haversine)."""
+
+    tx: Radio
+    rx: Radio | None = None          # default: symmetric (rx == tx)
+    distance_m: float | None = None
+    a_lat: float | None = None
+    a_lon: float | None = None
+    b_lat: float | None = None
+    b_lon: float | None = None
+    rain_rate_mm_hr: float = 0.0     # ITU-R P.838 rain fade (0 = clear sky)
+
+
+class LinkBudgetResult(_Base):
+    distance_m: float
+    fspl_db: float
+    rssi_dbm: float
+    margin_db: float
+    noise_floor_dbm: float
+    snr_db: float
+    quality: str
+    feasible: bool
+
+
+class WirelessLink(_Base):
+    """A planned wireless association between two geo-placed nodes."""
+
+    a_id: str
+    b_id: str
+    distance_m: float
+    fspl_db: float
+    rssi_dbm: float
+    margin_db: float
+    noise_floor_dbm: float
+    snr_db: float
+    quality: str
+    feasible: bool
+
+
+class CoverageCircle(_Base):
+    """Coverage footprint of a serving node, for map rendering."""
+
+    node_id: str
+    lat: float
+    lon: float
+    radius_m: float
+
+
+class WirelessPlanResult(_Base):
+    project_id: str
+    links: list[WirelessLink] = Field(default_factory=list)
+    coverage: list[CoverageCircle] = Field(default_factory=list)
+
+
+class CoverageResult(_Base):
+    node_id: str
+    radius_m: float
+
+
+# --- terrain line-of-sight / Fresnel ---------------------------------------
+class ElevationPoint(_Base):
+    lat: float
+    lon: float
+    elevation_m: float
+    distance_m: float = 0.0   # distance from the first point along the path
+
+
+class ElevationProfile(_Base):
+    samples: int
+    total_distance_m: float
+    points: list[ElevationPoint] = Field(default_factory=list)
+
+
+class LosCheckRequest(_Base):
+    """Terrain line-of-sight + Fresnel check between two endpoints.
+
+    Supply ``profile`` directly (offline / pre-fetched), or omit it to have the
+    server fetch terrain from the elevation provider for the given coordinates.
+    """
+
+    a_lat: float
+    a_lon: float
+    b_lat: float
+    b_lon: float
+    frequency_ghz: float = 5.8
+    tx_height_m: float = 10.0
+    rx_height_m: float = 5.0
+    samples: int = 24
+    profile: list[ElevationPoint] | None = None
+
+
+class LosCheckResult(_Base):
+    los_clear: bool
+    fresnel_clear: bool
+    worst_obstruction_m: float
+    min_clearance_ratio: float
+    distance_m: float
+    profile: ElevationProfile | None = None

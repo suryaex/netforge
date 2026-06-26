@@ -16,17 +16,19 @@ import {
   Monitor,
   Package,
   ChevronDown,
+  Radio,
 } from 'lucide-react';
 import { useUiStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
 import { useNosStore, type CustomNosEntry } from '@/store/nosStore';
 import { cn } from '@/lib/cn';
 
-type Section = 'general' | 'nos' | 'account';
+type Section = 'general' | 'nos' | 'devices' | 'account';
 
 const SECTIONS: { key: Section; label: string; icon: typeof Cpu }[] = [
   { key: 'general', label: 'General', icon: Monitor },
   { key: 'nos', label: 'Network OS', icon: Package },
+  { key: 'devices', label: 'Device Types', icon: Radio },
   { key: 'account', label: 'Account', icon: Cpu },
 ];
 
@@ -73,6 +75,7 @@ export function SettingsPanel() {
       <div className="nf-scroll min-h-0 flex-1 overflow-auto p-5">
         {activeSection === 'general' && <GeneralSection />}
         {activeSection === 'nos' && <NosSection />}
+        {activeSection === 'devices' && <DeviceTypesSection />}
         {activeSection === 'account' && <AccountSection />}
       </div>
     </div>
@@ -300,6 +303,241 @@ function CustomNosRow({ entry, onRemove }: { entry: CustomNosEntry; onRemove: ()
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
+    </div>
+  );
+}
+
+/* ---------- Device Types (Map mode) ---------- */
+
+interface CustomDeviceType {
+  id: string;
+  name: string;
+  kind: 'iso' | 'docker' | 'manual';
+  source: string;      // Docker image name or ISO path
+  description?: string;
+  createdAt: string;
+}
+
+const DEVICE_TYPES_KEY = 'netforge.deviceTypes';
+
+function loadDeviceTypes(): CustomDeviceType[] {
+  try {
+    const raw = localStorage.getItem(DEVICE_TYPES_KEY);
+    return raw ? (JSON.parse(raw) as CustomDeviceType[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDeviceTypes(list: CustomDeviceType[]): void {
+  localStorage.setItem(DEVICE_TYPES_KEY, JSON.stringify(list));
+}
+
+function DeviceTypesSection() {
+  const [types, setTypes] = useState<CustomDeviceType[]>(loadDeviceTypes);
+  const [showForm, setShowForm] = useState(false);
+  const [kind, setKind] = useState<CustomDeviceType['kind']>('docker');
+  const [name, setName] = useState('');
+  const [source, setSource] = useState('');
+  const [desc, setDesc] = useState('');
+
+  const add = () => {
+    if (!name.trim()) return;
+    const entry: CustomDeviceType = {
+      id: `dt-${Date.now()}`,
+      name: name.trim(),
+      kind,
+      source: source.trim(),
+      description: desc.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...types, entry];
+    setTypes(updated);
+    saveDeviceTypes(updated);
+    setName(''); setSource(''); setDesc('');
+    setShowForm(false);
+  };
+
+  const remove = (id: string) => {
+    const updated = types.filter((t) => t.id !== id);
+    setTypes(updated);
+    saveDeviceTypes(updated);
+  };
+
+  const kindMeta: Record<CustomDeviceType['kind'], { label: string; placeholder: string; hint: string }> = {
+    docker: {
+      label: 'Docker Image',
+      placeholder: 'vyos/vyos:1.4-rolling-202401',
+      hint: 'Any Docker Hub or private registry image',
+    },
+    iso: {
+      label: 'ISO / Appliance Path',
+      placeholder: '/opt/images/mikrotik-chr-7.12.img',
+      hint: 'Path to qcow2 / ISO / vmdk on the server',
+    },
+    manual: {
+      label: 'Identifier (optional)',
+      placeholder: 'custom-device-v1',
+      hint: 'Manual entry — no image required',
+    },
+  };
+
+  const kindColor: Record<CustomDeviceType['kind'], string> = {
+    docker: '#007AFF',
+    iso:    '#FF9F0A',
+    manual: '#34C759',
+  };
+
+  return (
+    <div className="space-y-5">
+      <SectionHeading>Custom Device Types</SectionHeading>
+      <p className="text-xs text-white/45">
+        Register network device types for use in map-mode emulation. Sources can be
+        Docker images, local appliance images (ISO / qcow2), or manual entries.
+      </p>
+
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-white/50">{types.length} custom type{types.length !== 1 ? 's' : ''}</span>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/70 transition-colors hover:border-accent/50 hover:text-accent"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add Device Type
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="space-y-3 rounded-lg border border-accent/20 bg-accent/5 p-4">
+          <h3 className="text-sm font-medium text-white/80">New Device Type</h3>
+
+          {/* Kind selector */}
+          <div className="flex rounded-md border border-white/10 bg-black/20 p-0.5">
+            {(['docker', 'iso', 'manual'] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setKind(k)}
+                className={cn(
+                  'flex-1 rounded px-2 py-1 text-xs capitalize transition-colors',
+                  kind === k
+                    ? 'text-white'
+                    : 'text-white/50 hover:text-white/80',
+                )}
+                style={kind === k ? { background: `${kindColor[k]}30`, color: kindColor[k] } : undefined}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+
+          <FormField label="Name *">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. VyOS 1.4 Router"
+              className={inputCls}
+            />
+          </FormField>
+
+          <FormField label={kindMeta[kind].label} hint={kindMeta[kind].hint}>
+            <input
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              placeholder={kindMeta[kind].placeholder}
+              className={inputCls}
+            />
+          </FormField>
+
+          <FormField label="Description (optional)">
+            <input
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder="Short description…"
+              className={inputCls}
+            />
+          </FormField>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setShowForm(false)}
+              className="rounded-md px-3 py-1.5 text-sm text-white/50 hover:text-white/80"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={add}
+              disabled={!name.trim()}
+              className={cn(
+                'rounded-md px-4 py-1.5 text-sm font-medium text-white transition-colors',
+                name.trim() ? 'bg-accent hover:bg-accent-soft' : 'cursor-not-allowed bg-accent/40',
+              )}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+
+      {types.length === 0 ? (
+        <p className="rounded-md border border-dashed border-white/10 p-4 text-center text-xs text-white/35">
+          No custom device types yet.
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          {types.map((t) => (
+            <div
+              key={t.id}
+              className="flex items-start justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-white/85">{t.name}</p>
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[10px] capitalize"
+                    style={{ background: `${kindColor[t.kind]}20`, color: kindColor[t.kind] }}
+                  >
+                    {t.kind}
+                  </span>
+                </div>
+                {t.description && (
+                  <p className="mt-0.5 text-xs text-white/40">{t.description}</p>
+                )}
+                {t.source && (
+                  <p className="mt-0.5 font-mono text-[10px] text-white/30 truncate">{t.source}</p>
+                )}
+              </div>
+              <button
+                onClick={() => remove(t.id)}
+                aria-label={`Remove ${t.name}`}
+                className="ml-2 shrink-0 rounded p-1 text-white/30 hover:bg-danger/15 hover:text-danger"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <SectionHeading>Built-in Wireless Device Templates</SectionHeading>
+      <p className="text-xs text-white/45">
+        Default device types available in map mode. These cannot be removed.
+      </p>
+      {[
+        { name: 'Access Point (Generic)', desc: 'Wi-Fi AP — 5 GHz, 20 dBm, 500 m range' },
+        { name: 'CPE / Client Device', desc: 'Customer Premises Equipment — auto-links to nearest AP' },
+        { name: 'Backhaul Tower', desc: 'Long-range tower — 5 GHz, 27 dBm, 2 km range' },
+      ].map((t) => (
+        <div
+          key={t.name}
+          className="flex items-center justify-between rounded-md border border-white/8 bg-white/5 px-3 py-2"
+        >
+          <div>
+            <p className="text-sm font-medium text-white/75">{t.name}</p>
+            <p className="text-xs text-white/35">{t.desc}</p>
+          </div>
+          <span className="rounded bg-white/8 px-1.5 py-0.5 text-[10px] text-white/40">built-in</span>
+        </div>
+      ))}
     </div>
   );
 }

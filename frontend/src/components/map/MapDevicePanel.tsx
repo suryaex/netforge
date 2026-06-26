@@ -1,16 +1,23 @@
 /**
  * MapDevicePanel — right-side properties panel for the selected map device.
- * Shows name, kind, coordinates, signal settings (txPower, frequency, range)
- * and IP address. Edits are applied immediately to the mapStore.
+ * Shows name, kind, coordinates, signal settings (txPower, frequency, range,
+ * antennaHeight) and IP. Link quality info includes RSSI, rain fade, LOS status.
  */
-import { Radio, Smartphone, RadioTower, MapPin, Signal, X } from 'lucide-react';
+import { Radio, Smartphone, RadioTower, MapPin, Signal, X, Mountain } from 'lucide-react';
 import { useMapStore, calcRssi, rssiColor, type MapDeviceKind } from '@/store/mapStore';
 import { cn } from '@/lib/cn';
 
 const KIND_META: Record<MapDeviceKind, { label: string; icon: typeof Radio; color: string }> = {
-  ap: { label: 'Access Point', icon: Radio, color: '#5856D6' },
-  cpe: { label: 'CPE / Client', icon: Smartphone, color: '#007AFF' },
-  tower: { label: 'Tower / Relay', icon: RadioTower, color: '#FF9F0A' },
+  ap:    { label: 'Access Point',  icon: Radio,       color: '#5856D6' },
+  cpe:   { label: 'CPE / Client',  icon: Smartphone,  color: '#007AFF' },
+  tower: { label: 'Tower / Relay', icon: RadioTower,  color: '#FF9F0A' },
+};
+
+const LOS_BADGE: Record<string, { label: string; color: string }> = {
+  clear:   { label: 'Clear ✓',    color: '#34C759' },
+  partial: { label: 'Partial ⚠',  color: '#FFCC00' },
+  blocked: { label: 'Blocked ✗',  color: '#FF453A' },
+  unknown: { label: 'Unknown…',   color: '#8E8E93' },
 };
 
 export function MapDevicePanel() {
@@ -24,11 +31,8 @@ export function MapDevicePanel() {
   const meta = KIND_META[device.kind];
   const Icon = meta.icon;
 
-  // Find links involving this device to show signal info
   const myLinks = links.filter((l) => l.fromId === device.id || l.toId === device.id);
-
-  const patch = (p: Parameters<typeof updateDevice>[1]) =>
-    updateDevice(device.id, p);
+  const patch = (p: Parameters<typeof updateDevice>[1]) => updateDevice(device.id, p);
 
   return (
     <div className="pointer-events-auto absolute right-4 top-16 z-[1000] w-72 animate-fade-in">
@@ -78,17 +82,13 @@ export function MapDevicePanel() {
           {/* Signal Settings */}
           <section>
             <h4 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
-              <Signal className="h-3 w-3" />
-              Signal Settings
+              <Signal className="h-3 w-3" /> Signal Settings
             </h4>
             <div className="space-y-2.5">
               <Field label="TX Power (dBm)">
                 <div className="flex items-center gap-2">
                   <input
-                    type="range"
-                    min={0}
-                    max={33}
-                    step={1}
+                    type="range" min={0} max={33} step={1}
                     value={device.txPower}
                     onChange={(e) => patch({ txPower: Number(e.target.value) })}
                     className="flex-1 accent-accent"
@@ -105,20 +105,18 @@ export function MapDevicePanel() {
                   onChange={(e) => patch({ frequency: Number(e.target.value) })}
                   className="w-full rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white/90 outline-none focus:border-accent"
                 >
-                  <option value={2.4} className="bg-[#141A2E]">2.4 GHz</option>
-                  <option value={5} className="bg-[#141A2E]">5 GHz</option>
-                  <option value={5.8} className="bg-[#141A2E]">5.8 GHz</option>
-                  <option value={60} className="bg-[#141A2E]">60 GHz (mmWave)</option>
+                  <option value={2.4}  className="bg-[#141A2E]">2.4 GHz</option>
+                  <option value={5}    className="bg-[#141A2E]">5 GHz</option>
+                  <option value={5.8}  className="bg-[#141A2E]">5.8 GHz</option>
+                  <option value={24}   className="bg-[#141A2E]">24 GHz (fixed wireless)</option>
+                  <option value={60}   className="bg-[#141A2E]">60 GHz (mmWave)</option>
                 </select>
               </Field>
 
               <Field label="Coverage Radius (m)">
                 <div className="flex items-center gap-2">
                   <input
-                    type="range"
-                    min={50}
-                    max={5000}
-                    step={50}
+                    type="range" min={50} max={5000} step={50}
                     value={device.range}
                     onChange={(e) => patch({ range: Number(e.target.value) })}
                     className="flex-1 accent-accent"
@@ -131,47 +129,74 @@ export function MapDevicePanel() {
             </div>
           </section>
 
+          {/* Antenna Height */}
+          <section>
+            <h4 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
+              <Mountain className="h-3 w-3" /> Antenna Height (m AGL)
+            </h4>
+            <div className="flex items-center gap-2">
+              <input
+                type="range" min={1} max={100} step={1}
+                value={device.antennaHeight}
+                onChange={(e) => patch({ antennaHeight: Number(e.target.value) })}
+                className="flex-1 accent-accent"
+              />
+              <span className="w-10 text-right font-mono text-xs text-white/70">
+                {device.antennaHeight}m
+              </span>
+            </div>
+          </section>
+
           {/* IP Address */}
           <Field label="IP Address">
             <input
               value={device.ip}
               onChange={(e) => patch({ ip: e.target.value })}
-              placeholder="e.g. 192.168.1.1/24"
+              placeholder="192.168.1.1/24"
               className="w-full rounded-md border border-white/10 bg-black/20 px-2.5 py-1.5 font-mono text-sm text-white/90 outline-none transition-colors focus:border-accent"
             />
           </Field>
 
-          {/* Links / Signal Quality */}
+          {/* Links & Signal Quality */}
           {myLinks.length > 0 && (
             <section>
               <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-white/40">
                 Connected Links
               </h4>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {myLinks.map((l) => {
-                  const color = rssiColor(l.rssi);
+                  const effectiveRssi = l.rssi - l.obstructionDb;
+                  const rc = rssiColor(effectiveRssi);
+                  const losBadge = LOS_BADGE[l.los] ?? LOS_BADGE['unknown']!;
                   return (
                     <li
                       key={l.id}
-                      className="flex items-center justify-between rounded-md bg-white/5 px-2.5 py-1.5 text-xs"
+                      className="space-y-1 rounded-md bg-white/5 px-2.5 py-2 text-xs"
                     >
-                      <span className="text-white/60">{l.distance} m</span>
-                      <span
-                        className="flex items-center gap-1 font-semibold"
-                        style={{ color }}
-                      >
-                        <span
-                          className="inline-block h-2 w-2 rounded-full"
-                          style={{ background: color }}
-                        />
-                        {l.rssi} dBm
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/60">{l.distance.toLocaleString()} m</span>
+                        <span className="font-semibold" style={{ color: rc }}>
+                          {effectiveRssi.toFixed(1)} dBm
+                        </span>
+                      </div>
+                      {(l.rainDb > 0 || l.obstructionDb > 0) && (
+                        <div className="text-[10px] text-white/40 space-y-0.5">
+                          {l.rainDb > 0 && <p>Rain: −{l.rainDb.toFixed(1)} dB</p>}
+                          {l.obstructionDb > 0 && <p>Terrain: −{l.obstructionDb.toFixed(1)} dB</p>}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/35">Fresnel r₁: {l.fresnelM} m</span>
+                        <span className="text-[10px] font-semibold" style={{ color: losBadge.color }}>
+                          {losBadge.label}
+                        </span>
+                      </div>
                     </li>
                   );
                 })}
               </ul>
 
-              {/* Quick RSSI preview at range edge */}
+              {/* Quick RSSI at range edge */}
               {device.kind !== 'cpe' && (
                 <div className="mt-2 rounded-md bg-white/5 px-3 py-2 text-[11px] text-white/50">
                   Edge RSSI @ {device.range}m:{' '}

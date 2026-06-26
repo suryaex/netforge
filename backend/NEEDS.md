@@ -43,3 +43,41 @@ lain agar integrasi penuh berjalan. Orchestrator yang menyatukan.
   + image NOS, agar adaptor konkret (mis. `containerlab.py`) bisa dibangun.
   Default saat ini `NullEmulationAdaptor` (run murni-sim, import-able tanpa
   Docker).
+
+## 6. Map mode — kontrak geo + wireless  → `frontend-architecture-advisor`
+Engine RF otoritatif ada di backend (`engine/wireless.py`); frontend boleh tetap
+menghitung FSPL ringan untuk feedback instan saat drag, tapi nilai yang
+dipersist + di-broadcast berasal dari backend agar semua klien sepakat.
+
+- **Node sekarang punya field geo (opsional, WGS84)** — selaraskan
+  `frontend/src/api/types.ts` `NodeModel`:
+  - `lat: number | null`, `lon: number | null`
+  - `radio: Radio | null` dengan field **identik**:
+    `tx_power_dbm, frequency_ghz, antenna_gain_dbi, bandwidth_mhz,
+     rx_sensitivity_dbm, misc_loss_db, max_range_m`
+  - Map device = Node biasa (`kind` `ap`/`host`/`olt`) + `lat/lon/radio`.
+    Tower dibedakan via `intent.map_role = "tower"`.
+- **Endpoint baru** (`app/api/wireless.py`, prefix `/api/wireless`):
+  - `POST /link-budget` → `{distance_m, fspl_db, rssi_dbm, margin_db,
+     noise_floor_dbm, snr_db, quality, feasible}`. Body: `{tx: Radio, rx?: Radio,
+     distance_m? | a_lat/a_lon/b_lat/b_lon, rain_rate_mm_hr?}`.
+  - `GET  /plan/{project_id}` → `{project_id, links[], coverage[]}` — link plan
+     (RSSI/quality per asosiasi) + lingkaran coverage per AP/tower.
+  - `GET  /coverage/{node_id}` → `{node_id, radius_m}`.
+  - `GET  /elevation?a_lat&a_lon&b_lat&b_lon&samples` → profil elevasi
+     (proxy open-elevation; 503 bila provider tak terjangkau).
+  - `POST /los-check` → `{los_clear, fresnel_clear, worst_obstruction_m,
+     min_clearance_ratio, distance_m, profile?}`. Boleh kirim `profile` sendiri
+     untuk mode offline (tanpa panggilan jaringan).
+- **WebSocket `/ws/topology?project=<id>`** kini event-driven (bukan tick):
+  - on-connect kirim `{"type":"snapshot","topology":{...}}` lalu
+    `{"type":"wireless.plan", project_id, links[], coverage[]}`.
+  - tiap node/link berubah → broadcast `node.updated` / `link.updated` /
+    `node.deleted` / `link.deleted` + `wireless.plan` baru (recompute server-side).
+  - balas `pong` untuk frame teks `ping` (heartbeat). Tambahkan tipe-tipe ini ke
+    union `TopologyEvent`.
+- **Catatan integrasi**: dua endpoint sinyal sekarang hidup berdampingan —
+  `/api/signal/calculate` (FSPL ringkas) dan `/api/wireless/*` (link budget penuh
+  + planner + LoS + rain fade). Frontend sebaiknya memakai `/api/wireless` sebagai
+  sumber kebenaran; `/api/signal/calculate` bisa dipertahankan untuk kalkulasi
+  cepat ad-hoc atau dideprekasi oleh orchestrator.

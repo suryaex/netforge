@@ -14,29 +14,69 @@ import contextlib
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.services.events import get_bus
+from app.services import wireless as wsvc
 from app.store import get_repo
+from app.store import NotFound
 
 router = APIRouter()
 
 
 @router.websocket("/ws/topology")
-async def ws_topology(ws: WebSocket):
-    """Push periodic topology/stat snapshots. Clients may also send pings."""
+async def ws_topology(ws: WebSocket, project: str | None = None):
+    """Event-driven topology stream.
+
+    On connect we push a full ``snapshot`` (plus the current ``wireless.plan``
+    when a project is scoped), then relay deltas published on the in-process bus
+    by mutating endpoints — so the moment a device is placed/moved on the map,
+    every open client sees the recomputed links and RSSI without polling.
+
+    A client may scope the stream with ``?project=<id>``; otherwise it receives
+    global events. ``ping`` text frames are answered with ``pong`` for heartbeat.
+    """
     await ws.accept()
     repo = get_repo()
-    try:
-        while True:
-            projects = await repo.list_projects()
+    bus = get_bus()
+
+    # --- initial snapshot ---------------------------------------------------
+    if project:
+        try:
+            topo = await repo.topology(project)
             await ws.send_json(
-                {"type": "topology.tick", "projects": [p.id for p in projects]}
+                {"type": "snapshot", "topology": topo.model_dump(mode="json")}
             )
-            with contextlib.suppress(asyncio.TimeoutError):
-                # allow client messages (e.g. subscribe) without blocking the tick
-                msg = await asyncio.wait_for(ws.receive_text(), timeout=2.0)
-                if msg == "ping":
-                    await ws.send_json({"type": "pong"})
-    except WebSocketDisconnect:
-        return
+            plan = wsvc.plan_topology(topo)
+            await ws.send_json({"type": "wireless.plan", **plan.model_dump(mode="json")})
+        except NotFound:
+            await ws.send_json({"type": "error", "reason": "project not found"})
+
+    # --- fan-out loop -------------------------------------------------------
+    async def pump_client() -> None:
+        """Relay client → server frames (ping/pong). Raises on disconnect."""
+        while True:
+            msg = await ws.receive_text()
+            if msg == "ping":
+                await ws.send_json({"type": "pong"})
+
+    async with bus.subscription(project) as events:
+
+        async def pump_bus() -> None:
+            async for event in events:
+                await ws.send_json(event)
+
+        client_task = asyncio.create_task(pump_client())
+        bus_task = asyncio.create_task(pump_bus())
+        try:
+            await asyncio.wait(
+                {client_task, bus_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+        except WebSocketDisconnect:
+            pass
+        finally:
+            for t in (client_task, bus_task):
+                t.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await t
 
 
 @router.websocket("/ws/console/{node_id}")

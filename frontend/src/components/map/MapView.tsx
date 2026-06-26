@@ -46,9 +46,12 @@ import {
   towerKind,
   type OsmTower,
 } from '@/services/osmService';
+import { MAP_TILES, type TileLayerConfig } from '@/config/mapTiles';
 import { MapToolbar } from './MapToolbar';
 import { MapDevicePanel } from './MapDevicePanel';
 import { MapOnboardingModal } from './MapOnboardingModal';
+import { MapLayerSwitcher } from './MapLayerSwitcher';
+import { DeviceLibraryModal } from './DeviceLibraryModal';
 
 // Prevent default marker icon 404 errors in Vite. We use CircleMarker, not Marker.
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)['_getIconUrl'];
@@ -558,6 +561,60 @@ function WeatherBar() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Basemap tiles — layer-aware (Satellite / Street / Hybrid + label overlay)   */
+/* -------------------------------------------------------------------------- */
+function BaseTiles() {
+  const mapLayer = useMapStore((s) => s.mapLayer);
+  const cfg: TileLayerConfig = MAP_TILES[mapLayer];
+  return (
+    <>
+      <TileLayer
+        key={`base-${mapLayer}`}
+        url={cfg.url}
+        attribution={cfg.attribution}
+        maxZoom={cfg.maxZoom ?? 19}
+        {...(cfg.subdomains ? { subdomains: cfg.subdomains } : {})}
+      />
+      {cfg.overlay && (
+        <TileLayer
+          key={`overlay-${mapLayer}`}
+          url={cfg.overlay.url}
+          attribution={cfg.overlay.attribution}
+          opacity={cfg.overlay.opacity ?? 1}
+          maxZoom={cfg.maxZoom ?? 19}
+        />
+      )}
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* UISP-style Weak↔Strong gradient legend (top-right)                          */
+/* -------------------------------------------------------------------------- */
+function GradientLegend() {
+  return (
+    <div className="pointer-events-none absolute right-4 top-3 z-[1000]">
+      <div className="glass-strong rounded-xl border border-white/15 px-3 py-2 shadow-glass">
+        <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-white/40">
+          Signal Strength
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-white/60">Weak</span>
+          <span
+            className="h-2.5 w-28 rounded-full"
+            style={{
+              background:
+                'linear-gradient(90deg, #FF453A 0%, #FFCC00 40%, #A3E635 70%, #34C759 100%)',
+            }}
+          />
+          <span className="text-[10px] text-white/60">Strong</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Main MapView                                                                */
 /* -------------------------------------------------------------------------- */
 export function MapView() {
@@ -566,6 +623,7 @@ export function MapView() {
   const mapCenter = useMapStore((s) => s.mapCenter);
   const mapZoom = useMapStore((s) => s.mapZoom);
   const showOnboarding = useMapStore((s) => s.showOnboarding);
+  const deviceLibraryOpen = useMapStore((s) => s.deviceLibraryOpen);
   const devById = useMapStore((s) => s.devices);
 
   return (
@@ -577,20 +635,8 @@ export function MapView() {
         className="h-full w-full"
         style={{ background: '#0d1117' }}
       >
-        {/* Esri World Imagery — free satellite tiles, no API key */}
-        <TileLayer
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          attribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-          maxZoom={19}
-        />
-
-        {/* CARTO dark label overlay for readability */}
-        <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-          opacity={0.75}
-          maxZoom={19}
-        />
+        {/* Layer-aware basemap — Satellite / Street / Hybrid (see MapLayerSwitcher) */}
+        <BaseTiles />
 
         <ZoomControl position="bottomright" />
 
@@ -620,11 +666,16 @@ export function MapView() {
       <MapToolbar />
       <MapDevicePanel />
       <SignalLegend />
+      <GradientLegend />
       <ToolHint />
       <WeatherBar />
+      <MapLayerSwitcher />
 
       {/* First-run modal */}
       {showOnboarding && <MapOnboardingModal />}
+
+      {/* Device library modal */}
+      {deviceLibraryOpen && <DeviceLibraryModal />}
     </div>
   );
 }

@@ -26,6 +26,23 @@ from engine.packet import Packet
 from engine.runtime import NodeRuntime
 from engine.scheduler import Scheduler
 from engine.simulation import Simulation, SimulationConfig, SimulationResult
+from engine.wireless import (
+    GeoDevice,
+    LinkBudget,
+    LinkQuality,
+    LosResult,
+    PlannedLink,
+    Radio,
+    fresnel_radius_m,
+    fspl_db,
+    haversine_m,
+    line_of_sight,
+    link_budget,
+    max_range_m,
+    plan_links,
+    rain_attenuation_db,
+    rain_specific_attenuation_db_km,
+)
 
 __all__ = [
     "EventQueue",
@@ -41,6 +58,22 @@ __all__ = [
     "Simulation",
     "SimulationConfig",
     "SimulationResult",
+    # wireless / RF
+    "Radio",
+    "GeoDevice",
+    "LinkBudget",
+    "LinkQuality",
+    "LosResult",
+    "PlannedLink",
+    "fspl_db",
+    "haversine_m",
+    "fresnel_radius_m",
+    "line_of_sight",
+    "link_budget",
+    "max_range_m",
+    "plan_links",
+    "rain_attenuation_db",
+    "rain_specific_attenuation_db_km",
 ]
 
 __version__ = "0.1.0"
