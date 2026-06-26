@@ -1,0 +1,167 @@
+{
+  "version": "1.0.0",
+  "country": "Indonesia",
+  "regulator": "Direktorat Jenderal Sumber Daya dan Perangkat Pos dan Informatika (SDPPI)",
+  "regulatory_basis": "Peraturan Menteri Kominfo No. 7 Tahun 2021 tentang Penggunaan Spektrum Frekuensi Radio",
+  "last_updated": "2024-01",
+  "notes": "Reference only. Always verify with SDPPI for current licensing status before deployment. ISP operators using unlicensed spectrum must comply with Permenkominfo No. 1 Tahun 2019.",
+  "bands": [
+    {
+      "id": "band-900mhz",
+      "name": "900 MHz",
+      "range_mhz": { "start": 890, "end": 960 },
+      "center_mhz": 915,
+      "channel_width_mhz": [0.2, 0.4],
+      "max_eirp_dbm": 30,
+      "license_type": "licensed",
+      "primary_use": ["cellular", "GSM", "LTE Band 8"],
+      "isp_use": "Lisensi seluler (Telkomsel, Indosat, XL). Tidak tersedia untuk ISP swasta umum.",
+      "propagation_notes": "Penetrasi bangunan sangat baik. Cocok untuk coverage area luas dan rural.",
+      "regulation_ref": "Kepmen Kominfo No. 21/2018"
+    },
+    {
+      "id": "band-2400mhz",
+      "name": "2.4 GHz (ISM)",
+      "range_mhz": { "start": 2400, "end": 2483.5 },
+      "center_mhz": 2441,
+      "channel_width_mhz": [20, 40],
+      "max_eirp_dbm": 36,
+      "max_tx_power_dbm": 100,
+      "license_type": "unlicensed",
+      "primary_use": ["Wi-Fi 802.11b/g/n/ax", "Bluetooth", "Zigbee"],
+      "isp_use": "Tersedia bebas untuk WLAN/WISP. Sangat padat di area urban. 3 kanal non-overlapping: 1, 6, 11.",
+      "channels": [
+        { "number": 1, "center_mhz": 2412 },
+        { "number": 6, "center_mhz": 2437 },
+        { "number": 11, "center_mhz": 2462 }
+      ],
+      "propagation_notes": "Rentan terhadap interferensi dari microwave oven, Bluetooth. Range efektif outdoor 1-5 km dengan antena directional.",
+      "regulation_ref": "Permenkominfo No. 1/2019"
+    },
+    {
+      "id": "band-3500mhz",
+      "name": "3.5 GHz (5G NR)",
+      "range_mhz": { "start": 3300, "end": 3800 },
+      "center_mhz": 3550,
+      "channel_width_mhz": [50, 100],
+      "max_eirp_dbm": 58,
+      "license_type": "licensed",
+      "primary_use": ["5G NR", "fixed wireless access"],
+      "isp_use": "Lelang 5G 2021: Telkomsel, Indosat, XL mendapat alokasi. Potensi FWA (Fixed Wireless Access) untuk ISP dengan izin.",
+      "propagation_notes": "Coverage lebih sempit dari 2.4 GHz. Ideal untuk densifikasi urban dengan kapasitas tinggi.",
+      "regulation_ref": "Kepmen Kominfo No. 126/2021"
+    },
+    {
+      "id": "band-5800mhz",
+      "name": "5.8 GHz (U-NII-3, ISM)",
+      "range_mhz": { "start": 5725, "end": 5850 },
+      "center_mhz": 5787,
+      "channel_width_mhz": [20, 40, 80],
+      "max_eirp_dbm": 36,
+      "max_tx_power_dbm": 30,
+      "license_type": "unlicensed",
+      "primary_use": ["Wi-Fi 802.11a/n/ac/ax", "WISP PTMP", "PTP backhaul"],
+      "isp_use": "Band utama untuk WISP Indonesia. Kurang padat dibanding 2.4 GHz. Mendukung kanal 80 MHz untuk throughput tinggi.",
+      "channels": [
+        { "number": 149, "center_mhz": 5745 },
+        { "number": 153, "center_mhz": 5765 },
+        { "number": 157, "center_mhz": 5785 },
+        { "number": 161, "center_mhz": 5805 },
+        { "number": 165, "center_mhz": 5825 }
+      ],
+      "propagation_notes": "LOS dibutuhkan untuk jarak > 2 km. Range efektif: 1-15 km (PTMP), 5-50 km (PTP dish). Fresnel zone clearance kritis.",
+      "regulation_ref": "Permenkominfo No. 1/2019"
+    },
+    {
+      "id": "band-5150mhz",
+      "name": "5.15–5.35 GHz (U-NII-1/2)",
+      "range_mhz": { "start": 5150, "end": 5350 },
+      "center_mhz": 5250,
+      "channel_width_mhz": [20, 40, 80],
+      "max_eirp_dbm": 30,
+      "license_type": "unlicensed_restricted",
+      "primary_use": ["Wi-Fi 802.11a/n/ac/ax indoor", "radar (DFS)"],
+      "isp_use": "Penggunaan indoor only di Indonesia. DFS (Dynamic Frequency Selection) wajib aktif untuk menghindari interferensi radar. Tidak direkomendasikan untuk outdoor WISP.",
+      "propagation_notes": "Terbatas untuk penggunaan dalam gedung. DFS scan dapat menyebabkan downtime 1 menit saat mendeteksi radar.",
+      "regulation_ref": "Permenkominfo No. 1/2019"
+    },
+    {
+      "id": "band-60ghz",
+      "name": "60 GHz (mmWave / V-Band)",
+      "range_mhz": { "start": 57000, "end": 66000 },
+      "center_mhz": 61500,
+      "channel_width_mhz": [2160],
+      "max_eirp_dbm": 82,
+      "license_type": "unlicensed",
+      "primary_use": ["PTP backhaul", "wireless bridge", "WiGig"],
+      "isp_use": "Ideal untuk backhaul last-mile urban. Throughput hingga 2+ Gbps. Attenuasi hujan tinggi — pertimbangkan availability target.",
+      "propagation_notes": "Attenuasi oksigen 15 dB/km. Efektif maksimal 1-3 km. Memerlukan LOS mutlak. Rain fade kritis di atas 200m.",
+      "rain_fade_db_per_km": 15,
+      "oxygen_absorption_db_per_km": 15,
+      "regulation_ref": "Permenkominfo No. 7/2021"
+    },
+    {
+      "id": "band-18ghz",
+      "name": "18 GHz (Ku-Band Backhaul)",
+      "range_mhz": { "start": 17700, "end": 19700 },
+      "center_mhz": 18700,
+      "channel_width_mhz": [14, 28, 56],
+      "max_eirp_dbm": 55,
+      "license_type": "licensed",
+      "primary_use": ["microwave backhaul PTP", "carrier-grade"],
+      "isp_use": "Digunakan oleh ISP tier-1 dan operator seluler untuk backhaul BTS. Memerlukan izin stasiun radio dari SDPPI.",
+      "propagation_notes": "Rentan rain fade. Diperlukan fade margin 25-35 dB. Availability 99.999% butuh link budget ketat.",
+      "regulation_ref": "Kepmen Kominfo No. 646/2001 + amendemen"
+    },
+    {
+      "id": "band-23ghz",
+      "name": "23 GHz (Microwave Backhaul)",
+      "range_mhz": { "start": 21200, "end": 23600 },
+      "center_mhz": 22400,
+      "channel_width_mhz": [3.5, 7, 14, 28, 56],
+      "max_eirp_dbm": 55,
+      "license_type": "licensed",
+      "primary_use": ["microwave PTP backhaul"],
+      "isp_use": "Alternatif 18 GHz untuk jarak menengah 2-15 km. Lebih rentan rain fade dibanding 18 GHz.",
+      "propagation_notes": "Rain attenuation ~10 dB/km saat hujan lebat. Jarak efektif 1-10 km tergantung climate zone.",
+      "regulation_ref": "Kepmen Kominfo No. 646/2001 + amendemen"
+    },
+    {
+      "id": "band-lte-1800",
+      "name": "LTE Band 3 (1800 MHz)",
+      "range_mhz": { "start": 1710, "end": 1880 },
+      "center_mhz": 1795,
+      "channel_width_mhz": [5, 10, 15, 20],
+      "max_eirp_dbm": 46,
+      "license_type": "licensed",
+      "primary_use": ["4G LTE", "5G NR Band n3"],
+      "isp_use": "Alokasi operator seluler. Tidak tersedia untuk ISP swasta. Coverage urban baik, kapasitas tinggi.",
+      "propagation_notes": "Balance antara coverage (lebih baik dari 2600 MHz) dan kapasitas. Digunakan untuk data seluler utama.",
+      "regulation_ref": "Kepmen Kominfo No. 21/2018"
+    },
+    {
+      "id": "band-lte-2300",
+      "name": "LTE Band 40 / TDD (2300 MHz)",
+      "range_mhz": { "start": 2300, "end": 2400 },
+      "center_mhz": 2350,
+      "channel_width_mhz": [5, 10, 15, 20],
+      "max_eirp_dbm": 46,
+      "license_type": "licensed",
+      "primary_use": ["4G LTE TDD", "BWA (Broadband Wireless Access)"],
+      "isp_use": "Alokasi BWA Indonesia: Telkom (Flexi) dan beberapa ISP regional mendapat izin. Potensi FWA untuk akses broadband tetap.",
+      "propagation_notes": "TDD sehingga tidak ada duplexing frequency separation. Sinkronisasi waktu antar BTS kritis untuk menghindari interferensi.",
+      "regulation_ref": "Kepmen Kominfo No. 238/2014"
+    }
+  ],
+  "isp_licensing_summary": {
+    "unlicensed_bands": ["2.4 GHz", "5.8 GHz", "60 GHz"],
+    "licensed_bands_for_isps": ["3.5 GHz (lewat lelang/izin khusus)", "2.3 GHz BWA (izin regional)"],
+    "carrier_only_bands": ["900 MHz", "1800 MHz", "2.1 GHz", "2.6 GHz"],
+    "recommended_for_wisp": {
+      "short_range_ptmp": "5.8 GHz (< 15 km, unlicensed)",
+      "long_range_ptp": "5.8 GHz dish atau 60 GHz (< 3 km)",
+      "urban_backhaul": "60 GHz atau 18/23 GHz (licensed)",
+      "rural_coverage": "2.4 GHz atau 900 MHz sub-GHz (lihat Cambium cnReach)"
+    }
+  }
+}
