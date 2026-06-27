@@ -16,6 +16,7 @@ import {
   ReactFlow,
   Background,
   BackgroundVariant,
+  ConnectionMode,
   Controls,
   MiniMap,
   type Connection,
@@ -41,6 +42,7 @@ export function TopologyCanvas() {
   const rfRef = useRef<ReactFlowInstance<Node<DeviceNodeData>, Edge> | null>(null);
   const nodesMap = useTopologyStore((s) => s.nodes);
   const linksMap = useTopologyStore((s) => s.links);
+  const selectedNodeId = useTopologyStore((s) => s.selectedNodeId);
   const moveNode = useTopologyStore((s) => s.moveNode);
   const upsertNode = useTopologyStore((s) => s.upsertNode);
   const upsertLink = useTopologyStore((s) => s.upsertLink);
@@ -54,9 +56,10 @@ export function TopologyCanvas() {
         id: n.id,
         type: 'device',
         position: { x: n.x, y: n.y },
+        selected: n.id === selectedNodeId,
         data: { name: n.name, kind: n.kind, nos: n.nos, mode: n.mode, status: n.status },
       })),
-    [nodesMap],
+    [nodesMap, selectedNodeId],
   );
 
   const rfEdges: Edge[] = useMemo(
@@ -178,6 +181,7 @@ export function TopologyCanvas() {
         onConnect={onConnect}
         onPaneClick={() => select({ nodeId: null, linkId: null })}
         onEdgeClick={(_e, edge) => select({ linkId: edge.id })}
+        connectionMode={ConnectionMode.Loose}
         fitView
         snapToGrid
         snapGrid={[16, 16]}

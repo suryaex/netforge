@@ -134,12 +134,21 @@ class NetworkModel:
         return list(self.graph.neighbors(node_id))
 
     def shortest_path(self, src: str, dst: str) -> list[str] | None:
-        """Delay-weighted shortest path; None if disconnected.
+        """Delay-weighted shortest path over *operational* links; None if
+        disconnected.
 
         Used by sim-mode default forwarding when no protocol RIB is installed.
+        Edges whose backing link is down are excluded so traffic reroutes around
+        failures (and is dropped only when no healthy path remains) — otherwise
+        downing a link had no routing effect.
         """
+        def _edge_up(u: str, v: str) -> bool:
+            link = self.links.get(self.graph[u][v].get("link_id"))
+            return link is None or link.up
+
+        graph = nx.subgraph_view(self.graph, filter_edge=_edge_up)
         try:
-            return nx.shortest_path(self.graph, src, dst, weight="weight")
+            return nx.shortest_path(graph, src, dst, weight="weight")
         except (nx.NetworkXNoPath, nx.NodeNotFound):
             return None
 

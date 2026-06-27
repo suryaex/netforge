@@ -63,6 +63,11 @@ def build_model(topo: Topology) -> NetworkModel:
                 delay=l.delay / 1000.0,   # ms -> s
                 loss=l.loss,
                 mtu=l.mtu,
+                # Honor operational state: a link toggled down/admin_down in the
+                # UI must actually stop carrying traffic. Without this the engine
+                # left every link up=True, so disabling a link had no effect on
+                # the run (packets were still delivered over a "down" link).
+                up=str(l.status) == "up",
             )
         )
     return model

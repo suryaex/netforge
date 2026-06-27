@@ -8,28 +8,70 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, Loader2, RefreshCw } from 'lucide-react';
-import { updateApi, type UpdateCheck, type UpdateStatus } from '@/api/client';
+import {
+  updateApi,
+  type ApiError,
+  type UpdateCheck,
+  type UpdateStatus,
+} from '@/api/client';
 import { cn } from '@/lib/cn';
+
+/**
+ * Turn a normalized {@link ApiError} (or anything else thrown) into an honest,
+ * user-facing message. The previous version blamed *every* failure on an
+ * unreachable backend, which was misleading for timeouts, CORS rejections,
+ * 404s (backend too old to expose /update), and 5xx server errors — all of
+ * which mean the backend *was* reachable.
+ */
+function describeError(e: unknown): string {
+  const err = (e ?? {}) as Partial<ApiError> & { code?: string };
+  const statusCode = typeof err.status === 'number' ? err.status : 0;
+  const msg = typeof err.message === 'string' ? err.message : '';
+
+  // status 0 = no HTTP response: timeout, DNS/connection failure, or a
+  // CORS-blocked response (the browser hides the body, axios sees a network error).
+  if (statusCode === 0) {
+    if (/timeout|timed out|ECONNABORTED/i.test(msg) || err.code === 'ECONNABORTED') {
+      return 'Update check timed out — the backend may be busy. Try again.';
+    }
+    return 'Could not reach the update service (network or CORS). Is the backend running?';
+  }
+  if (statusCode === 404) {
+    return 'Update endpoint not found — the backend may be out of date.';
+  }
+  if (statusCode === 429) {
+    return 'GitHub rate-limited the update check. Try again in a few minutes.';
+  }
+  if (statusCode >= 500) {
+    return 'The backend errored while checking for updates. Check its logs.';
+  }
+  return msg || 'Update check failed.';
+}
 
 export function UpdatesButton() {
   const [open, setOpen] = useState(false);
+  // `info` holds the last *successful* check so the version stays visible even
+  // if a later refresh fails. `error` is tracked separately from `info` so a
+  // transient failure does not wipe out a known-good version, and so we never
+  // mistake "haven't checked yet" for "up to date".
   const [info, setInfo] = useState<UpdateCheck | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval>>();
 
   const check = useCallback(async () => {
     setBusy(true);
+    setError(null);
     try {
-      setInfo(await updateApi.check());
-    } catch {
-      setInfo({
-        current: '?',
-        latest: null,
-        update_available: false,
-        checked_at: Date.now() / 1000,
-        error: 'Could not reach the backend.',
-      });
+      const next = await updateApi.check();
+      setInfo(next);
+      // The backend was reached but may itself have failed to reach GitHub; it
+      // reports that as a 200 with an `error` field. Surface it as an error so
+      // we don't fall through to "up to date".
+      setError(next.error ?? null);
+    } catch (e) {
+      setError(describeError(e));
     } finally {
       setBusy(false);
     }
@@ -66,13 +108,18 @@ export function UpdatesButton() {
         }
       }, 3000);
     } catch (e) {
-      setStatus({ state: 'error', message: (e as { message?: string })?.message ?? 'Apply failed.' });
+      setStatus({ state: 'error', message: describeError(e) });
     } finally {
       setBusy(false);
     }
   }, []);
 
-  const available = info?.update_available;
+  const available = info?.update_available ?? false;
+  // We are mid-check with nothing to show yet — distinct from "up to date".
+  const checking = busy && !info;
+  // Only claim "up to date" once we have a successful, error-free check that
+  // reports no newer version (covers latest === current gracefully).
+  const upToDate = !!info && !error && !available;
 
   return (
     <div className="relative">
@@ -97,7 +144,8 @@ export function UpdatesButton() {
             <span className="font-semibold">Software update</span>
             <button
               onClick={() => void check()}
-              className="grid h-6 w-6 place-items-center rounded hover:bg-white/10"
+              disabled={busy}
+              className="grid h-6 w-6 place-items-center rounded hover:bg-white/10 disabled:opacity-50"
               title="Check again"
             >
               <RefreshCw className={cn('h-3.5 w-3.5', busy && 'animate-spin')} />
@@ -106,17 +154,22 @@ export function UpdatesButton() {
 
           <div className="space-y-1 text-white/70">
             <div>
-              Current: <span className="tabular-nums text-white">{info?.current ?? '…'}</span>
+              Current:{' '}
+              <span className="tabular-nums text-white">
+                {info?.current ?? (checking ? '…' : '—')}
+              </span>
             </div>
             <div>
               Latest:{' '}
               <span className="tabular-nums text-white">
-                {info?.latest ?? (info?.error ? '—' : '…')}
+                {info
+                  ? (info.latest ?? 'Could not reach GitHub')
+                  : (checking ? '…' : '—')}
               </span>
             </div>
           </div>
 
-          {info?.error && <p className="mt-2 text-xs text-warning">{info.error}</p>}
+          {error && <p className="mt-2 text-xs text-warning">{error}</p>}
 
           {available ? (
             <>
@@ -139,9 +192,11 @@ export function UpdatesButton() {
                 </p>
               )}
             </>
-          ) : (
-            !info?.error && <p className="mt-2 text-xs text-success">You&apos;re up to date.</p>
-          )}
+          ) : checking ? (
+            <p className="mt-2 text-xs text-white/50">Checking for updates…</p>
+          ) : upToDate ? (
+            <p className="mt-2 text-xs text-success">You&apos;re up to date.</p>
+          ) : null}
 
           {status && (
             <p className="mt-2 border-t border-white/10 pt-2 text-xs text-white/70">

@@ -21,6 +21,14 @@ async def create_link(body: LinkCreate, r: MemoryRepository = Depends(repo)):
     return created
 
 
+@router.get("/links/{link_id}", response_model=Link)
+async def get_link(link_id: str, r: MemoryRepository = Depends(repo)):
+    try:
+        return await r.get_link(link_id)
+    except StoreNotFound as exc:
+        raise translate_not_found(exc) from exc
+
+
 @router.patch("/links/{link_id}", response_model=Link)
 async def update_link(link_id: str, patch: LinkUpdate, r: MemoryRepository = Depends(repo)):
     try:

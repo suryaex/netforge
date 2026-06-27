@@ -62,9 +62,16 @@ services:
     restart: unless-stopped
     environment:
       ENVIRONMENT: development
+      # APP_VERSION is stamped by install.sh (passed as env var); falls back to
+      # the pydantic-settings default ("0.1") when running compose directly
+      # without install.sh.
+      APP_VERSION: ${APP_VERSION:-0.1}
       DATABASE_URL: postgresql+asyncpg://netforge:netforge@postgres:5432/netforge
       REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: http://localhost:5180,http://localhost:3000
+      # install.sh computes CORS from the detected LAN/VPN/public IPs and passes
+      # it here.  The default includes :8090 (nginx gateway) and both common dev
+      # ports so the app works whether you hit it via the gateway or Vite direct.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5180,http://localhost:3000,http://localhost:8090}
       EMULATION_BACKEND: "null"
     ports:
       - "8000:8000"

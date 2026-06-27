@@ -8,13 +8,13 @@ import { topologyChannel } from '@/api/ws';
 import type { ConnState } from '@/api/ws';
 import { useTopologyStore } from '@/store/topologyStore';
 
-export function useTopologyChannel(enabled: boolean): ConnState {
+export function useTopologyChannel(enabled: boolean, projectId?: string | null): ConnState {
   const applyEvent = useTopologyStore((s) => s.applyEvent);
   const [state, setState] = useState<ConnState>('connecting');
 
   useEffect(() => {
-    if (!enabled) return;
-    const channel = topologyChannel();
+    if (!enabled || !projectId) return;
+    const channel = topologyChannel(projectId);
     const offMsg = channel.onMessage(applyEvent);
     const offState = channel.onState(setState);
     channel.connect();
@@ -23,7 +23,7 @@ export function useTopologyChannel(enabled: boolean): ConnState {
       offState();
       channel.close();
     };
-  }, [enabled, applyEvent]);
+  }, [enabled, projectId, applyEvent]);
 
   return state;
 }

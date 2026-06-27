@@ -21,7 +21,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections import deque
 from functools import lru_cache
 from typing import Any, AsyncIterator
 
@@ -34,12 +33,11 @@ GLOBAL = "*"
 class _Subscriber:
     """A single connected client's event queue, optionally project-scoped."""
 
-    __slots__ = ("queue", "project_id", "_buf")
+    __slots__ = ("queue", "project_id")
 
     def __init__(self, project_id: str | None, maxsize: int) -> None:
         self.project_id = project_id
         self.queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=maxsize)
-        self._buf: deque = deque()
 
     def offer(self, event: dict[str, Any]) -> None:
         """Non-blocking enqueue; drop oldest on overflow so we never block the

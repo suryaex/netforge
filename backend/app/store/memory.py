@@ -73,10 +73,24 @@ class MemoryRepository:
             self._nodes[node.id] = node
             return node
 
+    # Node fields whose value may legitimately be None (i.e. "clear this field"),
+    # as opposed to fields where None simply means "not provided in this PATCH".
+    _NULLABLE_NODE_FIELDS: frozenset[str] = frozenset(
+        {"lat", "lon", "radio", "intent", "config_ref"}
+    )
+
     async def update_node(self, nid: str, patch: dict) -> Node:
         async with self._lock:
             node = await self.get_node(nid)
-            updated = node.model_copy(update={k: v for k, v in patch.items() if v is not None})
+            # Allow None only for genuinely nullable fields (clearing a geo position,
+            # removing a radio, etc.).  For non-nullable fields (name, nos, mode, …)
+            # a None value from a partial PATCH body means "not provided", so skip it.
+            filtered = {
+                k: v
+                for k, v in patch.items()
+                if v is not None or k in self._NULLABLE_NODE_FIELDS
+            }
+            updated = node.model_copy(update=filtered)
             self._nodes[nid] = updated
             return updated
 

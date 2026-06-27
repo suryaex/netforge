@@ -31,7 +31,9 @@ from app.core.config import get_settings
 
 _RELEASES_LATEST = "https://api.github.com/repos/{repo}/releases/latest"
 _TAGS = "https://api.github.com/repos/{repo}/tags"
-_HTTP_TIMEOUT = 6  # seconds — keep the UI responsive on a slow network
+# Keep each request short so the worst case (releases/latest miss → tags fallback)
+# stays well under the frontend's request timeout and never feels like a hang.
+_HTTP_TIMEOUT = 4  # seconds per request
 
 
 # --------------------------------------------------------------------------- #
@@ -79,7 +81,13 @@ def _get_json(url: str) -> object:
 
 
 def _latest_release(repo: str) -> dict | None:
-    """Latest published release, falling back to the newest tag."""
+    """Latest published release, falling back to the newest tag.
+
+    The tags fallback only runs when GitHub *answered* but reported no published
+    release (HTTP 404). On a network failure (timeout / DNS / connection refused)
+    we return immediately rather than burning a second timeout on a host we just
+    failed to reach — that keeps the worst-case latency to a single request.
+    """
     try:
         rel = _get_json(_RELEASES_LATEST.format(repo=repo))
         if isinstance(rel, dict) and rel.get("tag_name"):
@@ -89,9 +97,14 @@ def _latest_release(repo: str) -> dict | None:
                 "url": rel.get("html_url") or "",
                 "published_at": rel.get("published_at") or "",
             }
-    except (urllib.error.HTTPError, urllib.error.URLError, ValueError, OSError):
-        pass
-    # No releases yet → newest tag.
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:  # 403 rate-limit, 5xx, etc. — GitHub reachable but unhappy.
+            return None
+        # 404 → repo has no published release yet; try the newest tag below.
+    except (urllib.error.URLError, ValueError, OSError):
+        return None  # GitHub unreachable — don't pay a second timeout.
+
+    # No published release → newest tag.
     try:
         tags = _get_json(_TAGS.format(repo=repo))
         if isinstance(tags, list) and tags:
@@ -111,6 +124,12 @@ def _latest_release(repo: str) -> dict | None:
 # Public API used by the router.
 # --------------------------------------------------------------------------- #
 def check() -> dict:
+    """Compare the running version with the latest GitHub release.
+
+    Always returns a structured payload — never raises. A failure to reach GitHub
+    is reported via the ``error`` field with the current version still populated,
+    so the UI can tell "GitHub unreachable" apart from "backend unreachable".
+    """
     settings = get_settings()
     current = settings.APP_VERSION
     latest = _latest_release(settings.GITHUB_REPO)
@@ -120,6 +139,7 @@ def check() -> dict:
             "latest": None,
             "update_available": False,
             "checked_at": int(time.time()),
+            "can_apply": bool(settings.UPDATE_TOKEN),
             "error": "Could not reach GitHub to check for updates.",
         }
     return {

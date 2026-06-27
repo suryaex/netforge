@@ -146,15 +146,19 @@ export interface Topology {
 export type TopologyEvent =
   | { type: 'snapshot'; topology: Topology }
   | { type: 'node.updated'; node: NodeModel }
+  | { type: 'node.deleted'; node_id: string }
   | { type: 'node.status'; node_id: string; status: NodeStatus }
   | { type: 'link.updated'; link: LinkModel }
+  | { type: 'link.deleted'; link_id: string }
   | { type: 'link.status'; link_id: string; status: LinkStatus }
   | { type: 'sim.tick'; t: number; metrics?: Record<string, number> };
 
 /** Console frames over /ws/console/{node_id}. */
 export type ConsoleEvent =
+  | { type: 'banner'; node_id?: string; text: string }
   | { type: 'output'; node_id: string; data: string }
   | { type: 'prompt'; node_id: string; prompt: string }
+  | { type: 'error'; node_id?: string; text: string }
   | { type: 'closed'; node_id: string; reason?: string };
 
 /** Simulation lifecycle. */

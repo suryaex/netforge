@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -48,7 +49,10 @@ async def ws_topology(ws: WebSocket, project: str | None = None):
             plan = wsvc.plan_topology(topo)
             await ws.send_json({"type": "wireless.plan", **plan.model_dump(mode="json")})
         except NotFound:
-            await ws.send_json({"type": "error", "reason": "project not found"})
+            with contextlib.suppress(Exception):
+                await ws.send_json({"type": "error", "reason": "project not found"})
+        except WebSocketDisconnect:
+            return
 
     # --- fan-out loop -------------------------------------------------------
     async def pump_client() -> None:
@@ -67,12 +71,14 @@ async def ws_topology(ws: WebSocket, project: str | None = None):
 
         client_task = asyncio.create_task(pump_client())
         bus_task = asyncio.create_task(pump_bus())
+        # asyncio.wait() does NOT propagate task exceptions — each task's
+        # exception is stored on the task object.  Disconnect is handled
+        # implicitly: pump_client raises WebSocketDisconnect inside its task,
+        # FIRST_COMPLETED fires, and the finally block cancels both tasks.
         try:
             await asyncio.wait(
                 {client_task, bus_task}, return_when=asyncio.FIRST_COMPLETED
             )
-        except WebSocketDisconnect:
-            pass
         finally:
             for t in (client_task, bus_task):
                 t.cancel()
@@ -89,9 +95,15 @@ async def ws_console(ws: WebSocket, node_id: str):
     try:
         node = await repo.get_node(node_id)
         await ws.send_json({"type": "banner", "text": f"{node.name} ({node.nos}) console — NetForge\n{node.name}> "})
-    except Exception:
-        await ws.send_json({"type": "error", "text": "node not found"})
-        await ws.close()
+    except NotFound:
+        # Node does not exist — send a clean error then close.
+        # Suppress any send failure (client may have already disconnected).
+        with contextlib.suppress(Exception):
+            await ws.send_json({"type": "error", "text": "node not found"})
+        with contextlib.suppress(Exception):
+            await ws.close()
+        return
+    except WebSocketDisconnect:
         return
 
     try:
@@ -101,8 +113,7 @@ async def ws_console(ws: WebSocket, node_id: str):
             # Fall back to treating the raw string as the command if parsing fails.
             cmd = raw
             try:
-                import json as _json
-                payload = _json.loads(raw)
+                payload = json.loads(raw)
                 if isinstance(payload, dict) and payload.get("type") == "input":
                     cmd = str(payload.get("data", ""))
             except Exception:

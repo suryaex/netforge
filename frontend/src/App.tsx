@@ -70,7 +70,7 @@ export default function App() {
   }, [topology, loadSnapshot]);
 
   // Realtime channel (auto-reconnect) — only when a project is active.
-  const conn = useTopologyChannel(!!projectId && isAuthenticated);
+  const conn = useTopologyChannel(isAuthenticated, projectId);
 
   // Open the default workspace once.
   useEffect(() => {

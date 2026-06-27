@@ -87,6 +87,54 @@ def test_seed_changes_loss_outcome():
     assert delivered_for(1) != delivered_for(999) or True  # toleran, tak flaky
 
 
+def test_down_link_breaks_delivery():
+    """Sebuah link yang di-set down harus benar-benar memutus trafik.
+
+    Regresi: dulu status link diabaikan saat membangun model engine sehingga
+    paket tetap "terkirim" lewat link yang sudah dimatikan.
+    """
+    model = _line_topology(3)
+    model.links["l1"].up = False  # putuskan n1<->n2
+    sim = Simulation(model, SimulationConfig(seed=0))
+    sim.inject(Packet(src="n0", dst="n2"))
+    result = sim.run()
+    assert result.delivered == 0
+    assert result.dropped == 1
+
+
+def test_down_link_reroutes_when_alternate_exists():
+    """Jika ada jalur sehat alternatif, trafik harus dibelokkan, bukan di-drop.
+
+    Topologi berlian: n0-n1-n3 dan n0-n2-n3. Matikan n1<->n3, paket n0->n3
+    harus tetap terkirim lewat n2.
+    """
+    model = NetworkModel()
+    for nid in ("n0", "n1", "n2", "n3"):
+        model.add_node(
+            NodeModel(
+                id=nid,
+                name=nid,
+                interfaces=[
+                    InterfaceModel(id=f"{nid}-a", node_id=nid, name="a"),
+                    InterfaceModel(id=f"{nid}-b", node_id=nid, name="b"),
+                ],
+            )
+        )
+    edges = [("e01", "n0-a", "n1-a"), ("e13", "n1-b", "n3-a"),
+             ("e02", "n0-b", "n2-a"), ("e23", "n2-b", "n3-b")]
+    for lid, a, b in edges:
+        model.add_link(LinkModel(id=lid, a_iface=a, b_iface=b, delay=0.001))
+    model.links["e13"].up = False  # matikan satu sisi berlian
+
+    sim = Simulation(model, SimulationConfig(seed=0))
+    sim.inject(Packet(src="n0", dst="n3"))
+    result = sim.run()
+    assert result.delivered == 1
+    assert result.dropped == 0
+    # rute yang dipakai harus melewati n2, bukan n1 yang putus
+    assert model.shortest_path("n0", "n3") == ["n0", "n2", "n3"]
+
+
 def test_no_route_is_dropped():
     """Node terisolasi -> paket di-drop dengan alasan no_route."""
     model = _line_topology(3)

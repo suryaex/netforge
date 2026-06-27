@@ -137,9 +137,13 @@ export class RealtimeChannel<TEvent> {
   }
 }
 
-/** Factory: topology channel (one per open project). */
-export function topologyChannel() {
-  return new RealtimeChannel<import('./types').TopologyEvent>('/ws/topology');
+/** Factory: topology channel (one per open project).
+ *  The backend scopes the stream — and sends the initial snapshot — only when
+ *  `?project=<id>` is present (see backend/app/api/ws.py). Without it the socket
+ *  receives every project's events and no snapshot, so always pass the id. */
+export function topologyChannel(projectId?: string | null) {
+  const qs = projectId ? `?project=${encodeURIComponent(projectId)}` : '';
+  return new RealtimeChannel<import('./types').TopologyEvent>(`/ws/topology${qs}`);
 }
 
 /** Factory: per-node console channel. */

@@ -21,11 +21,17 @@ export function SimulationBar() {
   };
 
   const onPlay = () =>
-    guarded('running', () => simApi.start({ project_id: projectId!, realtime: true }));
+    // Resume a paused/stepped run; only a fresh `idle` engine is (re)started.
+    guarded('running', () =>
+      simState === 'idle'
+        ? simApi.start({ project_id: projectId!, realtime: true })
+        : simApi.resume(projectId!),
+    );
   const onPause = () =>
     guarded('paused', () => simApi.pause(projectId!));
+  // After a single step the engine is paused — reflect that so Play resumes.
   const onStep = () =>
-    guarded('stepping', () => simApi.step(projectId!));
+    guarded('paused', () => simApi.step(projectId!));
   const onStop = () =>
     guarded('idle', () => simApi.stop(projectId!));
 

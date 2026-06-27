@@ -123,6 +123,23 @@ export const useTopologyStore = create<TopologyState>((set, get) => ({
           nodes.set(ev.node.id, ev.node);
           return { nodes };
         }
+        case 'node.deleted': {
+          if (!s.nodes.has(ev.node_id)) return {};
+          const nodes = new Map(s.nodes);
+          const node = nodes.get(ev.node_id);
+          nodes.delete(ev.node_id);
+          // cascade-remove links attached to this node's interfaces
+          const links = new Map(s.links);
+          const ifaceIds = new Set(node?.interfaces.map((i) => i.id) ?? []);
+          for (const [lid, l] of links) {
+            if (ifaceIds.has(l.a_iface) || ifaceIds.has(l.b_iface)) links.delete(lid);
+          }
+          return {
+            nodes,
+            links,
+            selectedNodeId: s.selectedNodeId === ev.node_id ? null : s.selectedNodeId,
+          };
+        }
         case 'node.status': {
           const node = s.nodes.get(ev.node_id);
           if (!node) return {};
@@ -134,6 +151,15 @@ export const useTopologyStore = create<TopologyState>((set, get) => ({
           const links = new Map(s.links);
           links.set(ev.link.id, ev.link);
           return { links };
+        }
+        case 'link.deleted': {
+          if (!s.links.has(ev.link_id)) return {};
+          const links = new Map(s.links);
+          links.delete(ev.link_id);
+          return {
+            links,
+            selectedLinkId: s.selectedLinkId === ev.link_id ? null : s.selectedLinkId,
+          };
         }
         case 'link.status': {
           const link = s.links.get(ev.link_id);

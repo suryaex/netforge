@@ -10,6 +10,7 @@ the production target.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
 
 from app.api.deps import repo, translate_not_found
 from app.exceptions.base import SimulationError
@@ -31,7 +32,12 @@ async def start_simulation(body: SimulateRequest, r: MemoryRepository = Depends(
     except StoreNotFound as exc:
         raise translate_not_found(exc) from exc
     try:
-        result = sim_service.run_once(topo, seed=body.seed, horizon=body.horizon)
+        # The kernel is synchronous and CPU-bound; running it inline would block
+        # the event loop (stalling every other request and the /ws/topology
+        # stream) for the whole run. Offload to a worker thread.
+        result = await run_in_threadpool(
+            sim_service.run_once, topo, seed=body.seed, horizon=body.horizon
+        )
     except Exception as exc:  # engine errors -> 422 with a clear message
         raise SimulationError(str(exc)) from exc
     state = {"project_id": body.project_id, "state": "completed", "result": result}

@@ -174,6 +174,27 @@ rand() {
   if command -v openssl >/dev/null 2>&1; then openssl rand -hex "${1:-24}";
   else head -c "${1:-24}" /dev/urandom | od -An -tx1 | tr -d ' \n'; fi
 }
+
+# App version stamped into the backend env so GET /api/update/check compares the
+# *real* running version against GitHub releases (otherwise APP_VERSION is stuck
+# at its "0.1" default and "Current" in the UI never reflects what's deployed).
+# Use the nearest git tag — the same reference scripts/self-update.sh and the
+# GitHub /releases/latest comparison use — so check/apply stay consistent.
+app_version() {
+  local v=""
+  if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+    v="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+  fi
+  [ -z "$v" ] && v="0.1"   # fresh checkout without tags → match the code default
+  echo "$v"
+}
+
+# Upsert KEY=VALUE in an env file (replace if present, append otherwise).
+set_env() { # file, key, value
+  local f="$1" k="$2" val="$3"
+  [ -f "$f" ] || return 0
+  if grep -q "^${k}=" "$f"; then sed_if "s|^${k}=.*|${k}=${val}|" "$f"; else printf '%s=%s\n' "$k" "$val" >> "$f"; fi
+}
 # ── Windows-host network (only meaningful under WSL) ─────────────────────────
 # Under WSL the address other devices can actually reach is the *Windows host's*,
 # not WSL's internal NAT (172.x) or the distro's own tailscale node. Ask Windows
@@ -364,6 +385,8 @@ PUBIP=""; [ "$PUBLIC_DETECT" = "1" ] && { PUBIP="$(pub_ip)"; [ -n "$PUBIP" ] && 
 PUBLIC_HOST="${PUBLIC_HOST:-}"                    # optional public domain
 
 CORS="$(build_origins)"
+APP_VERSION="$(app_version)"
+ok "Stamping app version: ${APP_VERSION}"
 
 # ── 1. Environment files ─────────────────────────────────────────────────────
 # Backend .env (used when running the backend outside Docker; harmless to keep
@@ -377,8 +400,8 @@ if [ -f backend/.env.example ]; then
     sed_if "s|^SECRET_KEY=.*|SECRET_KEY=$(rand 32)|" backend/.env
     ok "backend/.env created (SECRET_KEY generated)"
   fi
-  grep -q '^CORS_ORIGINS=' backend/.env && sed_if "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS}|" backend/.env \
-                                        || echo "CORS_ORIGINS=${CORS}" >> backend/.env
+  set_env backend/.env CORS_ORIGINS "${CORS}"
+  set_env backend/.env APP_VERSION  "${APP_VERSION}"
 fi
 
 # Frontend .env.local (single-origin via the gateway in dev; usually unset).
@@ -397,10 +420,9 @@ if [ "$PROD" = "1" ]; then
     ok "${ENV_FILE} created (POSTGRES_PASSWORD + SECRET_KEY generated)"
   fi
   if [ -f "$ENV_FILE" ]; then
-    grep -q '^HTTP_PORT=' "$ENV_FILE" && sed_if "s|^HTTP_PORT=.*|HTTP_PORT=${HTTP_PORT}|" "$ENV_FILE" \
-                                      || echo "HTTP_PORT=${HTTP_PORT}" >> "$ENV_FILE"
-    grep -q '^CORS_ORIGINS=' "$ENV_FILE" && sed_if "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS}|" "$ENV_FILE" \
-                                         || echo "CORS_ORIGINS=${CORS}" >> "$ENV_FILE"
+    set_env "$ENV_FILE" HTTP_PORT    "${HTTP_PORT}"
+    set_env "$ENV_FILE" CORS_ORIGINS "${CORS}"
+    set_env "$ENV_FILE" APP_VERSION  "${APP_VERSION}"
     ENVOPT="--env-file ${ENV_FILE}"
   fi
 fi
@@ -408,12 +430,18 @@ ok "Reachable via: localhost / LAN ${IP}${TSIP:+ / Tailscale ${TSIP}}${PUBIP:+ /
 
 # ── 2. Build & start ─────────────────────────────────────────────────────────
 case "$ACTION" in
-  rebuild) HTTP_PORT="$HTTP_PORT" $COMPOSE $ENVOPT $CF build --no-cache; BUILD="--build" ;;
+  # --rebuild: force a clean build without cache first, then start without
+  # rebuilding again (setting BUILD="" avoids a redundant second build pass).
+  rebuild) HTTP_PORT="$HTTP_PORT" CORS_ORIGINS="$CORS" APP_VERSION="$APP_VERSION" $COMPOSE $ENVOPT $CF build --no-cache; BUILD="" ;;
   nobuild) BUILD="" ;;
   *)       BUILD="--build" ;;
 esac
 info "Building & starting containers (HTTP entry on port ${HTTP_PORT})…"
-HTTP_PORT="$HTTP_PORT" $COMPOSE $ENVOPT $CF up -d $BUILD
+# Pass CORS_ORIGINS and APP_VERSION so docker-compose.yml can interpolate them
+# into the backend environment section (they are defined as ${VAR:-default}
+# there).  Without this, the container sees the hardcoded fallback value which
+# misses the LAN/gateway origin and shows the wrong app version in /api/health.
+HTTP_PORT="$HTTP_PORT" CORS_ORIGINS="$CORS" APP_VERSION="$APP_VERSION" $COMPOSE $ENVOPT $CF up -d $BUILD
 
 # Make the entry port reachable from other devices (LAN + Tailscale VPN).
 open_firewall "$HTTP_PORT"

@@ -28,16 +28,23 @@ export function useConsoleChannel(nodeId: string | null): ConsoleSession {
     const channel = consoleChannel(nodeId);
     channelRef.current = channel;
 
+    const append = (chunk: string) =>
+      setLines((prev) => {
+        const next = prev.concat(chunk.split('\n'));
+        return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
+      });
+
     const offMsg = channel.onMessage((ev: ConsoleEvent) => {
       if (ev.type === 'output') {
-        setLines((prev) => {
-          const next = prev.concat(ev.data.split('\n'));
-          return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next;
-        });
+        append(ev.data);
+      } else if (ev.type === 'banner' || ev.type === 'error') {
+        // Backend greets with a `banner` (carrying the device prompt) and
+        // reports failures via `error`; both are plain text to display.
+        append(ev.text);
       } else if (ev.type === 'prompt') {
         setPrompt(ev.prompt);
       } else if (ev.type === 'closed') {
-        setLines((prev) => prev.concat(`\n[session closed${ev.reason ? `: ${ev.reason}` : ''}]`));
+        append(`\n[session closed${ev.reason ? `: ${ev.reason}` : ''}]`);
       }
     });
     const offState = channel.onState(setState);
