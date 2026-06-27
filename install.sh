@@ -174,8 +174,27 @@ rand() {
   if command -v openssl >/dev/null 2>&1; then openssl rand -hex "${1:-24}";
   else head -c "${1:-24}" /dev/urandom | od -An -tx1 | tr -d ' \n'; fi
 }
+# ── Windows-host network (only meaningful under WSL) ─────────────────────────
+# Under WSL the address other devices can actually reach is the *Windows host's*,
+# not WSL's internal NAT (172.x) or the distro's own tailscale node. Ask Windows
+# for the truth via interop (powershell.exe / tailscale.exe).
+win_default_ip() {
+  command -v powershell.exe >/dev/null 2>&1 || return 0
+  powershell.exe -NoProfile -Command "(Get-NetIPConfiguration | Where-Object { \$_.IPv4DefaultGateway -ne \$null } | Select-Object -First 1 -ExpandProperty IPv4Address).IPAddress" 2>/dev/null | tr -d '\r\n '
+}
+win_ts_ip() {
+  if command -v tailscale.exe >/dev/null 2>&1; then
+    tailscale.exe ip -4 2>/dev/null | head -n1 | tr -d '\r\n '; return 0
+  fi
+  command -v powershell.exe >/dev/null 2>&1 || return 0
+  powershell.exe -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { \$_.IPAddress -like '100.*' } | Select-Object -First 1 -ExpandProperty IPAddress)" 2>/dev/null | tr -d '\r\n '
+}
+wsl_eth0_ip() { ip -4 -o addr show eth0 2>/dev/null | awk '{sub(/\/.*/,"",$4); print $4; exit}'; }
+
 lan_ip() {
   local ip=""
+  # In WSL, the reachable LAN IP is the Windows host's default-route address.
+  if is_wsl; then ip="$(win_default_ip)"; [ -n "$ip" ] && { echo "$ip"; return; }; fi
   if command -v ip >/dev/null 2>&1; then ip="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"; fi
   [ -z "$ip" ] && command -v hostname >/dev/null 2>&1 && ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   [ -z "$ip" ] && command -v ipconfig >/dev/null 2>&1 && ip="$(ipconfig getifaddr en0 2>/dev/null || true)"
@@ -190,6 +209,10 @@ lan_ip() {
 # own tailscale IP.
 ts_ip() {
   if is_wsl; then
+    # Prefer the *Windows host* tailscale node — that's the peer remote devices
+    # reach; the distro's own tailscale0 (a second node on the same machine)
+    # only answers from inside WSL and must not be advertised.
+    local w; w="$(win_ts_ip)"; [ -n "$w" ] && { echo "$w"; return 0; }
     local m
     m="$(ip -4 -o addr show 2>/dev/null | awk '$2!="tailscale0" && $4 ~ /^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\./ {sub(/\/.*/,"",$4); print $4; exit}')"
     [ -n "$m" ] && { echo "$m"; return 0; }
@@ -235,24 +258,45 @@ setup_wsl_firewall() {
   is_wsl || return 0
   command -v powershell.exe >/dev/null 2>&1 || { warn "WSL detected but powershell.exe not on PATH — open TCP ${1} on Windows manually"; return 0; }
   local port="$1"
-  # Only when mirrored networking is active (otherwise a portproxy, not a firewall
-  # rule, is what's needed — we don't want to give false assurance).
-  powershell.exe -NoProfile -Command "if((Get-Content \$env:USERPROFILE\\.wslconfig -ErrorAction SilentlyContinue) -match 'networkingMode\\s*=\\s*mirrored'){exit 0}else{exit 1}" >/dev/null 2>&1 || {
-    warn "WSL is not in mirrored networking mode — LAN devices reach NetForge only via --tailscale (VPN). See README."
+  # Branch on networking mode. Mirrored: WSL shares the host's IPs, so a Hyper-V
+  # firewall rule is enough. NAT (the default): the stack sits behind WSL's NAT,
+  # so the Windows host also needs a netsh portproxy into WSL's eth0 — without it
+  # the host LAN/Tailscale IP has no path in and times out (the bug this fixes).
+  local mirrored=0
+  powershell.exe -NoProfile -Command "if((Get-Content \$env:USERPROFILE\\.wslconfig -ErrorAction SilentlyContinue) -match 'networkingMode\\s*=\\s*mirrored'){exit 0}else{exit 1}" >/dev/null 2>&1 && mirrored=1
+
+  if [ "$mirrored" = "1" ]; then
+    if powershell.exe -NoProfile -Command "if(Get-NetFirewallHyperVRule -Name 'NetForge-${port}' -ErrorAction SilentlyContinue){exit 0}else{exit 1}" >/dev/null 2>&1; then
+      ok "Windows firewall already allows TCP ${port} into WSL (LAN ready)"; return 0
+    fi
+    info "WSL mirrored networking — adding a Windows firewall rule for TCP ${port} (approve the UAC prompt)…"
+    local ps enc
+    ps="New-NetFirewallHyperVRule -Name 'NetForge-${port}' -DisplayName 'NetForge ${port} (WSL LAN)' -Direction Inbound -VMCreatorId '${WSL_VMCREATOR}' -Protocol TCP -LocalPorts ${port} -Action Allow -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName 'NetForge ${port}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${port} -Profile Any -ErrorAction SilentlyContinue"
+    enc="$(powershell.exe -NoProfile -Command "[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('${ps}'))" 2>/dev/null | tr -d '\r')"
+    if [ -n "$enc" ] && powershell.exe -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-EncodedCommand','${enc}'" >/dev/null 2>&1; then
+      ok "Windows firewall rule added — NetForge reachable from the LAN on the host IP:${port}"
+    else
+      warn "Could not add the Windows firewall rule automatically (UAC declined?). Run this in an elevated PowerShell:"
+      warn "  New-NetFirewallHyperVRule -Name 'NetForge-${port}' -DisplayName 'NetForge ${port}' -Direction Inbound -VMCreatorId '${WSL_VMCREATOR}' -Protocol TCP -LocalPorts ${port} -Action Allow"
+    fi
     return 0
-  }
-  if powershell.exe -NoProfile -Command "if(Get-NetFirewallHyperVRule -Name 'NetForge-${port}' -ErrorAction SilentlyContinue){exit 0}else{exit 1}" >/dev/null 2>&1; then
-    ok "Windows firewall already allows TCP ${port} into WSL (LAN ready)"; return 0
   fi
-  info "WSL mirrored networking — adding a Windows firewall rule for TCP ${port} (approve the UAC prompt)…"
+
+  # NAT mode (default): forward Windows :port → WSL eth0:port, then open the
+  # Windows firewall. Re-created each run because WSL's NAT IP can change.
+  local wsl_ip; wsl_ip="$(wsl_eth0_ip)"
+  [ -z "$wsl_ip" ] && { warn "WSL NAT mode but couldn't read eth0 IP — add a portproxy + open TCP ${port} on Windows manually."; return 0; }
+  info "WSL NAT networking — forwarding Windows :${port} → WSL ${wsl_ip}:${port} (approve the UAC prompt)…"
   local ps enc
-  ps="New-NetFirewallHyperVRule -Name 'NetForge-${port}' -DisplayName 'NetForge ${port} (WSL LAN)' -Direction Inbound -VMCreatorId '${WSL_VMCREATOR}' -Protocol TCP -LocalPorts ${port} -Action Allow -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName 'NetForge ${port}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${port} -Profile Any -ErrorAction SilentlyContinue"
+  ps="netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=${port} 2>\$null | Out-Null; netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=${port} connectaddress=${wsl_ip} connectport=${port}; New-NetFirewallRule -DisplayName 'NetForge ${port}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${port} -Profile Any -ErrorAction SilentlyContinue"
   enc="$(powershell.exe -NoProfile -Command "[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('${ps}'))" 2>/dev/null | tr -d '\r')"
   if [ -n "$enc" ] && powershell.exe -NoProfile -Command "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-EncodedCommand','${enc}'" >/dev/null 2>&1; then
-    ok "Windows firewall rule added — NetForge reachable from the LAN on the host IP:${port}"
+    ok "Windows portproxy + firewall set — NetForge reachable on the host LAN/VPN IP:${port}"
+    warn "WSL's NAT IP can change after a reboot — re-run ./install.sh to refresh the portproxy."
   else
-    warn "Could not add the Windows firewall rule automatically (UAC declined?). Run this in an elevated PowerShell:"
-    warn "  New-NetFirewallHyperVRule -Name 'NetForge-${port}' -DisplayName 'NetForge ${port}' -Direction Inbound -VMCreatorId '${WSL_VMCREATOR}' -Protocol TCP -LocalPorts ${port} -Action Allow"
+    warn "Could not set the portproxy automatically (UAC declined?). Run this in an elevated PowerShell:"
+    warn "  netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=${port} connectaddress=${wsl_ip} connectport=${port}"
+    warn "  New-NetFirewallRule -DisplayName 'NetForge ${port}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort ${port} -Profile Any"
   fi
 }
 
