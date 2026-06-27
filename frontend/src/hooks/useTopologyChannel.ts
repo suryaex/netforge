@@ -7,15 +7,26 @@ import { useEffect, useState } from 'react';
 import { topologyChannel } from '@/api/ws';
 import type { ConnState } from '@/api/ws';
 import { useTopologyStore } from '@/store/topologyStore';
+import { useUiStore } from '@/store/uiStore';
 
 export function useTopologyChannel(enabled: boolean, projectId?: string | null): ConnState {
   const applyEvent = useTopologyStore((s) => s.applyEvent);
+  const applySimTick = useUiStore((s) => s.applySimTick);
   const [state, setState] = useState<ConnState>('connecting');
 
   useEffect(() => {
     if (!enabled || !projectId) return;
     const channel = topologyChannel(projectId);
-    const offMsg = channel.onMessage(applyEvent);
+    // sim.tick carries live engine telemetry/state → UI store; everything else
+    // is graph topology → topology store. Routing both keeps the transport bar
+    // authoritative without the topology reducer needing to know about the sim.
+    const offMsg = channel.onMessage((ev) => {
+      if (ev.type === 'sim.tick') {
+        applySimTick(ev.t, ev.metrics, ev.state);
+        return;
+      }
+      applyEvent(ev);
+    });
     const offState = channel.onState(setState);
     channel.connect();
     return () => {
@@ -23,7 +34,7 @@ export function useTopologyChannel(enabled: boolean, projectId?: string | null):
       offState();
       channel.close();
     };
-  }, [enabled, projectId, applyEvent]);
+  }, [enabled, projectId, applyEvent, applySimTick]);
 
   return state;
 }

@@ -151,7 +151,13 @@ export type TopologyEvent =
   | { type: 'link.updated'; link: LinkModel }
   | { type: 'link.deleted'; link_id: string }
   | { type: 'link.status'; link_id: string; status: LinkStatus }
-  | { type: 'sim.tick'; t: number; metrics?: Record<string, number> };
+  | {
+      type: 'sim.tick';
+      t: number;
+      metrics?: Record<string, number>;
+      /** Authoritative engine state for this tick; terminal values reset the bar. */
+      state?: SimState | 'completed' | 'stopped' | 'error';
+    };
 
 /** Console frames over /ws/console/{node_id}. */
 export type ConsoleEvent =
