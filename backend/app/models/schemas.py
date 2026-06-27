@@ -83,6 +83,13 @@ class LinkType(str, Enum):
     virtual = "virtual"
 
 
+class LinkStatus(str, Enum):
+    up = "up"
+    down = "down"
+    admin_down = "admin_down"
+    unknown = "unknown"
+
+
 class ConfigFormat(str, Enum):
     cli = "cli"
     netconf = "netconf"

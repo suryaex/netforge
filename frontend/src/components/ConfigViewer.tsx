@@ -28,6 +28,7 @@ export function ConfigViewer({ win }: { win: WindowInstance }) {
 
   useEffect(() => {
     if (!nodeId) return;
+    setActive(0);
     setLoading(true);
     setError(null);
     configsApi

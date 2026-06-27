@@ -14,27 +14,20 @@ const SPEEDS = [0.5, 1, 2, 4, 8];
 export function SimulationBar() {
   const { simState, simSpeed, setSimState, setSimSpeed, projectId } = useUiStore();
 
-  const guarded = (fn: () => Promise<unknown>) => {
+  const guarded = (nextState: typeof simState, fn: () => Promise<unknown>) => {
     if (!projectId) return;
+    setSimState(nextState);
     void fn().catch(() => setSimState('idle'));
   };
 
-  const onPlay = () => {
-    setSimState('running');
-    guarded(() => simApi.start({ project_id: projectId!, mode: 'realtime', speed: simSpeed }));
-  };
-  const onPause = () => {
-    setSimState('paused');
-    guarded(() => simApi.pause(projectId!));
-  };
-  const onStep = () => {
-    setSimState('stepping');
-    guarded(() => simApi.step(projectId!));
-  };
-  const onStop = () => {
-    setSimState('idle');
-    guarded(() => simApi.stop(projectId!));
-  };
+  const onPlay = () =>
+    guarded('running', () => simApi.start({ project_id: projectId!, realtime: true }));
+  const onPause = () =>
+    guarded('paused', () => simApi.pause(projectId!));
+  const onStep = () =>
+    guarded('stepping', () => simApi.step(projectId!));
+  const onStop = () =>
+    guarded('idle', () => simApi.stop(projectId!));
 
   const running = simState === 'running';
 

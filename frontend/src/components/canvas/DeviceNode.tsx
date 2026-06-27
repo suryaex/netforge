@@ -43,6 +43,7 @@ const STATUS_RING: Record<NodeStatus, string> = {
   running: 'ring-success',
   booting: 'ring-warning animate-pulse',
   stopped: 'ring-white/20',
+  degraded: 'ring-warning',
   error: 'ring-danger',
 };
 

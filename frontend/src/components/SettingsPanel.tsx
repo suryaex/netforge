@@ -39,7 +39,7 @@ const BUILTIN_NOS = [
   { key: 'iosxr', label: 'Cisco IOS-XR', description: 'Service-provider grade' },
   { key: 'nxos', label: 'Cisco NX-OS', description: 'Datacenter switching' },
   { key: 'junos', label: 'Juniper JunOS', description: 'Junos platform' },
-  { key: 'eos', label: 'Arista EOS', label2: 'EOS', description: 'Arista Extensible OS' },
+  { key: 'eos', label: 'Arista EOS', description: 'Arista Extensible OS' },
   { key: 'routeros', label: 'MikroTik RouterOS', description: 'Embedded router OS' },
   { key: 'vyos', label: 'VyOS', description: 'Open-source network OS' },
   { key: 'sros', label: 'Nokia SR-OS', description: 'Service Router OS' },

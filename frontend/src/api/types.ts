@@ -28,7 +28,7 @@ export type Nos =
   | 'vrp';
 
 export type NodeMode = 'sim' | 'emul';
-export type NodeStatus = 'stopped' | 'booting' | 'running' | 'error';
+export type NodeStatus = 'stopped' | 'booting' | 'running' | 'degraded' | 'error';
 
 export type IfaceType = 'eth' | 'sfp' | 'sfp28' | 'qsfp' | 'gpon' | 'wifi';
 export type LinkType = 'copper' | 'fiber' | 'wireless' | 'virtual';
@@ -160,6 +160,8 @@ export type SimState = 'idle' | 'running' | 'paused' | 'stepping';
 
 export interface SimulateRequest {
   project_id: string;
-  mode: 'realtime' | 'fast';
-  speed?: number;
+  /** Corresponds to backend `realtime` bool — true = wall-clock realtime. */
+  realtime?: boolean;
+  seed?: number;
+  horizon?: number;
 }

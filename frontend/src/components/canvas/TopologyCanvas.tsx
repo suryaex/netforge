@@ -18,7 +18,6 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
-  addEdge,
   type Connection,
   type Edge,
   type Node,
@@ -30,6 +29,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { DeviceNode, type DeviceNodeData } from './DeviceNode';
 import { useTopologyStore } from '@/store/topologyStore';
+import { useUiStore } from '@/store/uiStore';
 import { nodesApi, linksApi } from '@/api/client';
 import { deviceByKey } from '@/data/deviceCatalog';
 import { linkStatusColors, nodeColors } from '@/theme/tokens';
@@ -45,6 +45,7 @@ export function TopologyCanvas() {
   const upsertNode = useTopologyStore((s) => s.upsertNode);
   const upsertLink = useTopologyStore((s) => s.upsertLink);
   const select = useTopologyStore((s) => s.select);
+  const projectId = useUiStore((s) => s.projectId);
 
   // Project store Maps -> React Flow nodes/edges (memoized by identity).
   const rfNodes: Node<DeviceNodeData>[] = useMemo(
@@ -98,7 +99,7 @@ export function TopologyCanvas() {
   /* --- Link creation ------------------------------------------------------- */
   const onConnect = useCallback(
     (conn: Connection) => {
-      if (!conn.source || !conn.target) return;
+      if (!conn.source || !conn.target || !projectId) return;
       const aIface = firstFreeIface(nodesMap.get(conn.source));
       const bIface = firstFreeIface(nodesMap.get(conn.target));
       if (!aIface || !bIface) return;
@@ -117,13 +118,11 @@ export function TopologyCanvas() {
         status: 'up',
       });
       void linksApi
-        .create({ a_iface: aIface, b_iface: bIface, type: 'copper' })
+        .create({ project_id: projectId, a_iface: aIface, b_iface: bIface, type: 'copper' })
         .then((real) => upsertLink(real))
         .catch(() => {});
-      // satisfy RF internal edge add (no-op visually since we re-derive)
-      addEdge(conn, rfEdges);
     },
-    [nodesMap, upsertLink, rfEdges],
+    [nodesMap, upsertLink, projectId],
   );
 
   /* --- Drag-drop device creation from the palette -------------------------- */
@@ -135,6 +134,7 @@ export function TopologyCanvas() {
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      if (!projectId) return;
       const key = e.dataTransfer.getData('application/netforge-device');
       const tpl = deviceByKey[key];
       if (!tpl || !rfRef.current) return;
@@ -156,11 +156,11 @@ export function TopologyCanvas() {
       upsertNode(draft);
       select({ nodeId: tempId });
       void nodesApi
-        .create({ name: draft.name, kind: draft.kind, nos: draft.nos, mode: 'sim', x: pos.x, y: pos.y })
+        .create({ project_id: projectId, name: draft.name, kind: draft.kind, nos: draft.nos, mode: 'sim', x: pos.x, y: pos.y })
         .then((real) => upsertNode(real))
         .catch(() => {});
     },
-    [nodesMap.size, upsertNode, select],
+    [nodesMap.size, upsertNode, select, projectId],
   );
 
   return (
