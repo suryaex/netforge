@@ -96,7 +96,10 @@ export async function fetchOsmTowers(
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    // Abort after 10 s so a slow/unreachable Overpass never hangs the caller's
+    // loading state. On abort the fetch rejects, is caught below, and we return
+    // [] — the map degrades gracefully (towers shown only when the API succeeds).
+    const timeout = setTimeout(() => controller.abort(), 10_000);
 
     const resp = await fetch(OVERPASS_URL, {
       method: 'POST',

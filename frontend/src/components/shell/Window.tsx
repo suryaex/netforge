@@ -61,9 +61,19 @@ export function Window({ win, children, toolbar }: WindowProps) {
 
   if (win.minimized) return null;
 
+  const MIN_W = 200;
+  const MIN_H = 140;
+
   const geometry: React.CSSProperties = win.maximized
     ? { left: 8, top: 40, width: 'calc(100vw - 16px)', height: 'calc(100vh - 120px)' }
-    : { left: win.rect.x, top: win.rect.y, width: win.rect.w, height: win.rect.h };
+    : {
+        left: win.rect.x,
+        top: win.rect.y,
+        width: win.rect.w,
+        height: win.rect.h,
+        minWidth: MIN_W,
+        minHeight: MIN_H,
+      };
 
   return (
     <section

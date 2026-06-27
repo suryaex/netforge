@@ -120,28 +120,66 @@ function OsmTowerLayer() {
   const map = useMap();
   const [towers, setTowers] = useState<OsmTower[]>([]);
   const [loading, setLoading] = useState(false);
-  const abortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const safetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reqSeqRef = useRef(0);
 
   useEffect(() => {
+    let mounted = true;
+
+    const clearSafety = () => {
+      if (safetyRef.current) {
+        clearTimeout(safetyRef.current);
+        safetyRef.current = null;
+      }
+    };
+
     const load = () => {
       if (map.getZoom() < 12) {
         setTowers([]);
+        setLoading(false);
+        clearSafety();
         return;
       }
-      if (abortRef.current) clearTimeout(abortRef.current);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       // Debounce 600 ms to avoid hammering Overpass during rapid pan
-      abortRef.current = setTimeout(() => {
+      debounceRef.current = setTimeout(() => {
         const bounds = map.getBounds();
+        const seq = ++reqSeqRef.current;
         setLoading(true);
+
+        // Safety net: never let the loading indicator hang. If the request is
+        // still pending after 10 s (slow/unreachable Overpass, rate-limit),
+        // clear the flag regardless of whether the promise has settled.
+        clearSafety();
+        safetyRef.current = setTimeout(() => {
+          if (mounted) setLoading(false);
+        }, 10_000);
+
         fetchOsmTowers(
           bounds.getSouth(),
           bounds.getWest(),
           bounds.getNorth(),
           bounds.getEast(),
-        ).then((result) => {
-          setTowers(result);
-          setLoading(false);
-        });
+        )
+          .then((result) => {
+            // Ignore stale responses superseded by a newer pan/zoom.
+            if (!mounted || seq !== reqSeqRef.current) return;
+            setTowers(result);
+          })
+          .catch(() => {
+            // fetchOsmTowers already degrades to [] on error; this is a final
+            // safeguard so a rejection can never leave loading stuck.
+            if (!mounted || seq !== reqSeqRef.current) return;
+            setTowers([]);
+          })
+          .finally(() => {
+            // Always clear loading for the current request — even on network
+            // error, CORS failure, or Overpass rate-limit.
+            if (!mounted || seq !== reqSeqRef.current) return;
+            clearSafety();
+            setLoading(false);
+          });
       }, 600);
     };
 
@@ -150,9 +188,11 @@ function OsmTowerLayer() {
     load(); // initial load
 
     return () => {
+      mounted = false;
       map.off('moveend', load);
       map.off('zoomend', load);
-      if (abortRef.current) clearTimeout(abortRef.current);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      clearSafety();
     };
   }, [map]);
 

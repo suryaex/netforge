@@ -13,8 +13,8 @@
  * Real graph/window state lives in Zustand stores; server data is fetched via
  * the typed REST client and reconciled by the realtime channel.
  */
-import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { MenuBar } from '@/components/shell/MenuBar';
 import { Dock } from '@/components/shell/Dock';
 import { WindowHost } from '@/components/shell/WindowHost';
@@ -39,6 +39,10 @@ export default function App() {
   const openWindow = useWindowStore((s) => s.open);
   const windowCount = useWindowStore((s) => Object.keys(s.windows).length);
   const { show: showOnboarding, dismiss: dismissOnboarding } = useOnboarding();
+  const queryClient = useQueryClient();
+  // Guards the one-time first-run project provisioning against React's
+  // double-invoke (StrictMode) and re-renders, so we never create duplicates.
+  const provisioningRef = useRef(false);
 
   // Apply persisted theme on mount.
   useEffect(() => applyTheme(theme), [theme]);
@@ -52,11 +56,28 @@ export default function App() {
     enabled: isAuthenticated,
   });
 
+  // Select an active project. On a fresh install the backend has zero projects,
+  // so we provision a default one here — without a projectId the realtime
+  // channel never connects (status stuck on "connecting") and drag-drop on the
+  // canvas is a no-op (nothing renders). Auto-creating closes that first-run gap.
   useEffect(() => {
-    if (!projectId && projects && projects.length > 0) {
+    if (projectId || !projects) return; // wait until the list has loaded
+    if (projects.length > 0) {
       setProject(projects[0]!.id);
+      return;
     }
-  }, [projects, projectId, setProject]);
+    if (provisioningRef.current) return;
+    provisioningRef.current = true;
+    projectsApi
+      .create({ name: 'My Network', description: 'Default workspace' })
+      .then((p) => {
+        setProject(p.id);
+        void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      })
+      .catch(() => {
+        provisioningRef.current = false; // allow a retry on the next render
+      });
+  }, [projects, projectId, setProject, queryClient]);
 
   // Load the topology snapshot for the active project.
   const { data: topology } = useQuery({
@@ -73,11 +94,13 @@ export default function App() {
   const conn = useTopologyChannel(isAuthenticated, projectId);
 
   // Open the default workspace once.
+  // Topology is opened first so it receives the lowest z-index; palette and
+  // properties are opened after so they sit on top of the canvas by default.
   useEffect(() => {
     if (isAuthenticated && windowCount === 0) {
+      openWindow('topology', { title: 'Topology' });
       openWindow('palette', { title: 'Device Palette' });
       openWindow('properties', { title: 'Properties' });
-      openWindow('topology', { title: 'Topology' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);

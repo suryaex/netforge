@@ -51,15 +51,49 @@ interface WindowState {
   toggleApp: (kind: WindowKind, title: string) => string;
 }
 
-const DEFAULT_RECTS: Record<WindowKind, Rect> = {
-  topology: { x: 80, y: 64, w: 920, h: 620 },
-  palette: { x: 24, y: 96, w: 240, h: 520 },
-  properties: { x: 1020, y: 96, w: 340, h: 560 },
-  console: { x: 220, y: 380, w: 720, h: 320 },
-  config: { x: 300, y: 140, w: 680, h: 520 },
-  scenarios: { x: 360, y: 180, w: 560, h: 460 },
-  settings: { x: 240, y: 120, w: 680, h: 500 },
-};
+/**
+ * Calculate sensible default rects at the moment a window is opened so they
+ * adapt to the actual viewport instead of assuming a fixed 1440px canvas.
+ */
+function getDefaultRect(kind: WindowKind): Rect {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1440;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
+  // Leave room for the 36px MenuBar at the top and ~60px Dock at the bottom.
+  const MENU_H = 36;
+  const DOCK_H = 60;
+  const PAD = 20;
+  const SIDE_W = 280;
+
+  switch (kind) {
+    case 'palette':
+      return { x: PAD, y: 150, w: SIDE_W, h: 500 };
+    case 'properties':
+      return {
+        x: Math.max(SIDE_W + PAD * 3, vw - SIDE_W - PAD),
+        y: 150,
+        w: SIDE_W,
+        h: 400,
+      };
+    case 'topology': {
+      const left = SIDE_W + PAD * 2;           // start after palette
+      const right = vw - SIDE_W - PAD * 2;      // stop before properties
+      return {
+        x: left,
+        y: MENU_H + PAD,
+        w: Math.max(400, right - left),
+        h: Math.max(300, vh - MENU_H - DOCK_H - PAD * 2),
+      };
+    }
+    case 'console':
+      return { x: 220, y: 380, w: 720, h: 320 };
+    case 'config':
+      return { x: 300, y: 140, w: 680, h: 520 };
+    case 'scenarios':
+      return { x: 360, y: 180, w: 560, h: 460 };
+    case 'settings':
+      return { x: 240, y: 120, w: 680, h: 500 };
+  }
+}
 
 let seq = 0;
 const nextId = (kind: WindowKind) => `${kind}-${++seq}`;
@@ -80,7 +114,7 @@ export const useWindowStore = create<WindowState>((set, get) => ({
         id,
         kind,
         title: opts?.title ?? kind,
-        rect: opts?.rect ?? DEFAULT_RECTS[kind],
+        rect: opts?.rect ?? getDefaultRect(kind),
         z,
         minimized: false,
         maximized: false,
