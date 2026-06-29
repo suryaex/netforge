@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "NetGeo"
-    APP_VERSION: str = "0.1"
+    APP_VERSION: str = "0.2.0"
     ENVIRONMENT: str = "development"
     SECRET_KEY: str = "change-me"
     CORS_ORIGINS: str = "http://localhost,http://localhost:5173,http://localhost:3000"
