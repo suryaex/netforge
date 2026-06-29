@@ -7,22 +7,28 @@ mode's live coverage/topology updates.
 
 Uses the sync Starlette ``TestClient`` (its background event loop shares the
 process-wide repo + event bus singletons with the request path).
+
+Auth (RB-03): setiap WS connect memerlukan ``?token=<jwt>``; REST calls
+menggunakan header Authorization.  Kedua-duanya digenerate oleh helper dari
+conftest sehingga test tidak hardcode token.
 """
 from __future__ import annotations
-
-import json
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import make_auth_headers, make_test_token
 
 
 def test_topology_ws_sends_snapshot_and_live_plan():
-    client = TestClient(app)
+    auth_headers = make_auth_headers()
+    token = make_test_token()
+    client = TestClient(app, headers=auth_headers)
+
     # seed a project to scope the socket to
     pid = client.post("/api/projects", json={"name": "ws-wisp", "description": ""}).json()["id"]
 
-    with client.websocket_connect(f"/ws/topology?project={pid}") as ws:
+    with client.websocket_connect(f"/ws/topology?project={pid}&token={token}") as ws:
         first = ws.receive_json()
         assert first["type"] == "snapshot"
         assert first["topology"]["project"]["id"] == pid
@@ -47,9 +53,12 @@ def test_topology_ws_sends_snapshot_and_live_plan():
 
 
 def test_topology_ws_ping_pong():
-    client = TestClient(app)
+    auth_headers = make_auth_headers()
+    token = make_test_token()
+    client = TestClient(app, headers=auth_headers)
+
     pid = client.post("/api/projects", json={"name": "ws-ping", "description": ""}).json()["id"]
-    with client.websocket_connect(f"/ws/topology?project={pid}") as ws:
+    with client.websocket_connect(f"/ws/topology?project={pid}&token={token}") as ws:
         ws.receive_json()  # snapshot
         ws.receive_json()  # wireless.plan
         ws.send_text("ping")

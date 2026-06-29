@@ -6,9 +6,10 @@ Redis (realtime state / job queue) and engine knobs.
 """
 from __future__ import annotations
 
+import sys
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,12 +48,24 @@ class Settings(BaseSettings):
     # Security headers
     ENABLE_HSTS: bool = False
 
+    # Auth — JWT
+    # HS256 with SECRET_KEY is the chosen algorithm (single-node; no RS256 keypair files needed).
+    # ACCESS_TOKEN_EXPIRE_MINUTES controls JWT lifetime.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+    # Auth — admin seed account (RB-01)
+    # NETGEO_ADMIN_USER and NETGEO_ADMIN_PASSWORD are read once at startup.
+    # If NETGEO_ADMIN_PASSWORD is empty, an ephemeral password is auto-generated
+    # and printed to stderr — set it explicitly before any production use.
+    NETGEO_ADMIN_USER: str = "admin"
+    NETGEO_ADMIN_PASSWORD: str = ""
+
     # In-app self-update (see app/services/updater.py + scripts/self-update.sh).
     # GITHUB_REPO is the "owner/name" slug whose releases we compare against.
     GITHUB_REPO: str = "suryaex/netgeo"
     UPDATE_BRANCH: str = "main"
-    # Shared secret required to call POST /api/update/apply (NetGeo has no auth
-    # layer yet). Leave blank to DISABLE applying updates from the app.
+    # Shared secret required to call POST /api/update/apply.
+    # An authenticated session is also required (see RB-05).
     UPDATE_TOKEN: str = ""
     # Sentinel + status files exchanged with the host-side scripts/self-update.sh.
     UPDATE_TRIGGER_FILE: str = "/var/lib/netgeo/update.request"
@@ -62,9 +75,9 @@ class Settings(BaseSettings):
     # host-side watcher to pick up — the safer default in containers.
     UPDATE_INPROC: bool = False
 
-    @property
-    def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+    # ---------------------------------------------------------------------------
+    # Validators
+    # ---------------------------------------------------------------------------
 
     @field_validator("ENABLE_HSTS", "UPDATE_INPROC", mode="before")
     @classmethod
@@ -72,6 +85,43 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return v.strip().lower() in {"1", "true", "yes", "on"}
         return v
+
+    @model_validator(mode="after")
+    def _check_secret_key(self) -> "Settings":
+        """RB-07: Refuse to start in production with the default SECRET_KEY.
+
+        In non-production environments, print a prominent warning to stderr so
+        the developer sees it even before the logging system is configured.
+        """
+        if self.SECRET_KEY == "change-me":
+            if self.ENVIRONMENT == "production":
+                raise ValueError(
+                    "[FATAL] SECRET_KEY is set to the insecure default 'change-me'. "
+                    "This is not allowed in production. "
+                    "Set SECRET_KEY to a cryptographically random string of at least "
+                    "32 characters in your environment or .env file before deploying."
+                )
+            # Non-production: warn loudly — stderr is always visible.
+            print(
+                "\n"
+                "*** SECURITY WARNING ***\n"
+                "SECRET_KEY is 'change-me' (the insecure default).\n"
+                "Any party who knows this default value can forge JWT tokens.\n"
+                "Set SECRET_KEY to a unique random string before deploying.\n"
+                "Example: SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')\n"
+                "*** SECURITY WARNING ***\n",
+                file=sys.stderr,
+                flush=True,
+            )
+        return self
+
+    # ---------------------------------------------------------------------------
+    # Properties
+    # ---------------------------------------------------------------------------
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
 
 @lru_cache
